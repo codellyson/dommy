@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 // WXT provides browser API globally
@@ -13,6 +13,9 @@ function App() {
     javascript: string;
   } | null>(null);
   const [activeTab, setActiveTab] = useState("html");
+  const [isOutOfView, setIsOutOfView] = useState(false);
+  const codeBlockRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Get initial state from storage
@@ -31,6 +34,135 @@ function App() {
         setElementCode(null);
       }
     });
+
+    // Notify content script that popup is open
+    const notifyPopupOpened = async () => {
+      try {
+        const tabs = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (tabs[0]?.id) {
+          await browser.tabs.sendMessage(tabs[0].id, {
+            type: "POPUP_OPENED",
+          });
+          console.log("Popup opened notification sent to content script");
+        }
+      } catch (error) {
+        console.error(
+          "Failed to notify content script that popup opened:",
+          error
+        );
+      }
+    };
+
+    // Send notification after a short delay to ensure popup is fully loaded
+    const timeoutId = setTimeout(notifyPopupOpened, 100);
+
+    // Cleanup function to notify when popup closes
+    return () => {
+      clearTimeout(timeoutId);
+
+      const notifyPopupClosed = async () => {
+        try {
+          const tabs = await browser.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+          if (tabs[0]?.id) {
+            await browser.tabs.sendMessage(tabs[0].id, {
+              type: "POPUP_CLOSED",
+            });
+            console.log("Popup closed notification sent to content script");
+          }
+        } catch (error) {
+          console.error(
+            "Failed to notify content script that popup closed:",
+            error
+          );
+        }
+      };
+
+      notifyPopupClosed();
+    };
+  }, []);
+
+  // Collision detection effect
+  useEffect(() => {
+    const checkCollision = () => {
+      if (!codeBlockRef.current || !appRef.current) return;
+
+      const codeBlock = codeBlockRef.current;
+      const app = appRef.current;
+
+      const codeBlockRect = codeBlock.getBoundingClientRect();
+      const appRect = app.getBoundingClientRect();
+
+      // Check if code block is going out of the app container's view
+      const isOutOfBounds =
+        codeBlockRect.bottom > appRect.bottom ||
+        codeBlockRect.top < appRect.top ||
+        codeBlockRect.right > appRect.right ||
+        codeBlockRect.left < appRect.left;
+
+      setIsOutOfView(isOutOfBounds);
+    };
+
+    // Check collision on mount and when element code changes
+    checkCollision();
+
+    // Set up resize observer to monitor size changes
+    const resizeObserver = new ResizeObserver(checkCollision);
+    if (codeBlockRef.current) {
+      resizeObserver.observe(codeBlockRef.current);
+    }
+    if (appRef.current) {
+      resizeObserver.observe(appRef.current);
+    }
+
+    // Set up scroll listener for the app container
+    const handleScroll = () => {
+      setTimeout(checkCollision, 100); // Small delay to ensure DOM updates
+    };
+
+    const appElement = appRef.current;
+    if (appElement) {
+      appElement.addEventListener("scroll", handleScroll);
+    }
+
+    // Cleanup
+    return () => {
+      resizeObserver.disconnect();
+      if (appElement) {
+        appElement.removeEventListener("scroll", handleScroll);
+      }
+    };
+  }, [elementCode, activeTab]);
+
+  // Keep popup focused effect
+  useEffect(() => {
+    const keepFocused = () => {
+      if (appRef.current) {
+        appRef.current.focus();
+      }
+    };
+
+    // Keep focus on the popup
+    const focusInterval = setInterval(keepFocused, 100);
+
+    // Also focus on any click
+    const handleWindowClick = () => {
+      setTimeout(keepFocused, 10);
+    };
+
+    window.addEventListener("click", handleWindowClick);
+    window.addEventListener("mousedown", handleWindowClick);
+
+    return () => {
+      clearInterval(focusInterval);
+      window.removeEventListener("click", handleWindowClick);
+      window.removeEventListener("mousedown", handleWindowClick);
+    };
   }, []);
 
   const toggleHoverMode = async () => {
@@ -92,11 +224,12 @@ function App() {
   };
 
   const switchTab = (tabName: string) => {
+    console.log("Switching to tab:", tabName);
     setActiveTab(tabName);
   };
 
   return (
-    <div className="app">
+    <div className="app" ref={appRef} tabIndex={0}>
       <div className="header">
         <h1>Dommy</h1>
         <p>DOM Element Developer Tool</p>
@@ -139,93 +272,6 @@ function App() {
           )}
         </div>
       </div>
-
-      {elementCode && (
-        <div className="code-pane">
-          <h3>Element Code</h3>
-
-          <div className="code-tabs">
-            <div
-              className={`code-tab ${activeTab === "html" ? "active" : ""}`}
-              onClick={() => switchTab("html")}
-            >
-              HTML
-            </div>
-            <div
-              className={`code-tab ${activeTab === "css" ? "active" : ""}`}
-              onClick={() => switchTab("css")}
-            >
-              CSS
-            </div>
-            <div
-              className={`code-tab ${
-                activeTab === "javascript" ? "active" : ""
-              }`}
-              onClick={() => switchTab("javascript")}
-            >
-              JavaScript
-            </div>
-          </div>
-
-          <div className="code-content">
-            {activeTab === "html" && (
-              <div className="code-block active">
-                <div className="code-header">
-                  <span>HTML</span>
-                  <button
-                    className="copy-btn"
-                    data-copy="html"
-                    onClick={() => copyToClipboard(elementCode.html, "html")}
-                  >
-                    📋 Copy
-                  </button>
-                </div>
-                <pre className="code-editor">
-                  <code>{elementCode.html}</code>
-                </pre>
-              </div>
-            )}
-
-            {activeTab === "css" && (
-              <div className="code-block active">
-                <div className="code-header">
-                  <span>CSS</span>
-                  <button
-                    className="copy-btn"
-                    data-copy="css"
-                    onClick={() => copyToClipboard(elementCode.css, "css")}
-                  >
-                    📋 Copy
-                  </button>
-                </div>
-                <pre className="code-editor">
-                  <code>{elementCode.css}</code>
-                </pre>
-              </div>
-            )}
-
-            {activeTab === "javascript" && (
-              <div className="code-block active">
-                <div className="code-header">
-                  <span>JavaScript</span>
-                  <button
-                    className="copy-btn"
-                    data-copy="javascript"
-                    onClick={() =>
-                      copyToClipboard(elementCode.javascript, "javascript")
-                    }
-                  >
-                    📋 Copy
-                  </button>
-                </div>
-                <pre className="code-editor">
-                  <code>{elementCode.javascript}</code>
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="instructions">
         <h3>How to use:</h3>

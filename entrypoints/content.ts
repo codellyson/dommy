@@ -6,6 +6,8 @@ export default defineContentScript({
     let originalStyles: { [key: string]: string } = {};
     let codePanel: HTMLElement | null = null;
     let activeTab = 0;
+    let popupIsOpen = false;
+    const actionEvents = ["click", "mousedown"] as const;
 
     // Load initial state from storage
     browser.storage.local.get(["isElementSelected"]).then((result) => {
@@ -19,7 +21,7 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener((message) => {
       if (message.type === "TOGGLE_ELEMENT_SELECTION") {
         isElementSelected = message.isElementSelected;
-        if (isElementSelected) {
+        if (isElementSelected && !popupIsOpen) {
           document.addEventListener("click", handleClick, true);
         } else {
           document.removeEventListener("click", handleClick, true);
@@ -32,28 +34,48 @@ export default defineContentScript({
         }
       } else if (message.type === "TAKE_ELEMENT_SCREENSHOT") {
         takeScreenshot();
+      } else if (message.type === "POPUP_OPENED") {
+        console.log("Content script: Popup opened, setting popupIsOpen = true");
+        popupIsOpen = true;
+        // Remove any existing code panel when popup opens
+        removeCodePanel();
+        // Disable element selection when popup is open
+        document.removeEventListener("click", handleClick, true);
+      } else if (message.type === "POPUP_CLOSED") {
+        console.log(
+          "Content script: Popup closed, setting popupIsOpen = false"
+        );
+        popupIsOpen = false;
+        // Re-enable element selection if it was enabled before
+        if (isElementSelected) {
+          document.addEventListener("click", handleClick, true);
+        }
       }
     });
 
     function handleClick(event: MouseEvent) {
+      // debugger;
+      event.stopPropagation();
       const target = event.target as HTMLElement;
+      console.log("target", target);
       if (
         target &&
         target !== document.body &&
-        target !== document.documentElement
+        target !== document.documentElement &&
+        !target.closest("#dommy-code-panel") && // Don't select the code panel itself
+        !target.closest(".code-tab") && // Don't select tab elements
+        !target.closest(".copy-btn") && // Don't select copy buttons
+        !target.closest("button") && // Don't select any buttons
+        !target.closest("pre") && // Don't select code editor
+        !target.closest("code") && // Don't select code elements
+        !target.closest(".close-btn") // Don't select close button
       ) {
-        // const elementsToHighlight = [
-        //   "div",
-        //   "section",
-        //   "article",
-        //   "header",
-        //   "footer",
-        //   "main",
-        //   "aside",
-        //   "nav",
-        // ];
-        // if (elementsToHighlight.includes(target.tagName.toLowerCase())) {
-        // Always remove previous highlight and code panel first
+        console.log(
+          "Content script: Element clicked, popupIsOpen =",
+          popupIsOpen
+        );
+
+        // Always remove previous highlight first
         if (currentHoveredElement) {
           removeHighlight(currentHoveredElement);
         }
@@ -63,9 +85,8 @@ export default defineContentScript({
         highlightElement(target);
         currentHoveredElement = target;
 
-        // Extract element code and show code panel
+        // Extract element code
         const elementCode = extractElementCode(target);
-        showCodePanel(target, elementCode);
 
         // Send element info to popup
         const elementInfo = getElementInfo(target);
@@ -74,6 +95,10 @@ export default defineContentScript({
           elementInfo: elementInfo,
           elementCode: elementCode,
         });
+
+        // Always show content script code panel, but make it smaller when popup is open
+        console.log("Content script: Showing code panel");
+        showCodePanel(target, elementCode, popupIsOpen);
       }
 
       event.preventDefault();
@@ -122,7 +147,11 @@ export default defineContentScript({
       }
     }
 
-    function showCodePanel(element: HTMLElement, elementCode: any) {
+    function showCodePanel(
+      element: HTMLElement,
+      elementCode: any,
+      isPopupOpen: boolean
+    ) {
       // Remove any existing code panel first
       removeCodePanel();
 
@@ -146,8 +175,12 @@ export default defineContentScript({
 
       // Get element position
       const rect = element.getBoundingClientRect();
-      const panelWidth = Math.min(600, window.innerWidth - 40);
-      const panelHeight = 400;
+
+      // Adjust panel size based on popup state
+      const panelWidth = isPopupOpen
+        ? Math.min(400, window.innerWidth - 40)
+        : Math.min(600, window.innerWidth - 40);
+      const panelHeight = isPopupOpen ? 300 : 400;
 
       // Calculate position (below the element)
       let top = rect.bottom + 10;
@@ -164,6 +197,16 @@ export default defineContentScript({
         left = 20;
       }
 
+      // When popup is open, position the panel to avoid popup area
+      if (isPopupOpen) {
+        // Position on the right side of the screen to avoid popup
+        left = window.innerWidth - panelWidth - 20;
+        top = Math.max(
+          20,
+          Math.min(top, window.innerHeight - panelHeight - 20)
+        );
+      }
+
       // Create the actual panel
       const panel = document.createElement("div");
       panel.style.cssText = `
@@ -172,18 +215,39 @@ export default defineContentScript({
         left: ${left}px;
         width: ${panelWidth}px;
         height: ${panelHeight}px;
-        background: #1e1e1e;
-        border: 2px solid #007acc;
-        border-radius: 8px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        background: rgba(10, 10, 10, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 16px;
+        box-shadow: 
+          0 8px 32px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1),
+          0 0 0 1px rgba(255, 255, 255, 0.05);
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
         font-size: 12px;
-        color: #d4d4d4;
+        color: #e8e8e8;
         pointer-events: auto;
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        opacity: ${isPopupOpen ? "0.9" : "1"};
+        backdrop-filter: blur(20px);
+        position: relative;
       `;
+
+      // Add glassmorphism overlay
+      const overlay = document.createElement("div");
+      overlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+        pointer-events: none;
+        border-radius: 16px;
+        z-index: 1;
+      `;
+      panel.appendChild(overlay);
 
       // Create header
       const header = document.createElement("div");
@@ -191,35 +255,62 @@ export default defineContentScript({
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 12px;
-        background: #2d2d2d;
-        border-bottom: 1px solid #404040;
-        font-weight: 600;
+        padding: 16px 20px;
+        background: rgba(30, 30, 30, 0.8);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-weight: 700;
+        font-size: 16px;
+        backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 2;
       `;
 
       const title = document.createElement("span");
       title.textContent = "Element Code";
       title.style.color = "#fff";
+      title.style.textShadow = "0 2px 4px rgba(0, 0, 0, 0.3)";
 
       const closeBtn = document.createElement("button");
       closeBtn.textContent = "×";
+      closeBtn.className = "close-btn";
       closeBtn.style.cssText = `
-        background: none;
-        border: none;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         color: #fff;
         font-size: 18px;
         cursor: pointer;
-        padding: 0;
-        width: 20px;
-        height: 20px;
+        padding: 4px 8px;
+        width: 24px;
+        height: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 3px;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
       `;
-      closeBtn.onclick = removeCodePanel;
-      closeBtn.onmouseover = () => (closeBtn.style.background = "#404040");
-      closeBtn.onmouseout = () => (closeBtn.style.background = "none");
+
+      actionEvents.forEach((event) => {
+        closeBtn.addEventListener(event, (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          removeCodePanel();
+          if (currentHoveredElement) {
+            removeHighlight(currentHoveredElement);
+            currentHoveredElement = null;
+          }
+        });
+      });
+
+      closeBtn.onmouseover = () => {
+        closeBtn.style.background = "rgba(255, 255, 255, 0.2)";
+        closeBtn.style.transform = "scale(1.1)";
+      };
+      closeBtn.onmouseout = () => {
+        closeBtn.style.background = "rgba(255, 255, 255, 0.1)";
+        closeBtn.style.transform = "scale(1)";
+      };
 
       header.appendChild(title);
       header.appendChild(closeBtn);
@@ -228,8 +319,11 @@ export default defineContentScript({
       const tabs = document.createElement("div");
       tabs.style.cssText = `
         display: flex;
-        background: #252526;
-        border-bottom: 1px solid #404040;
+        background: rgba(0, 0, 0, 0.3);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 2;
       `;
 
       const tabNames = ["HTML", "CSS", "JavaScript"];
@@ -242,30 +336,76 @@ export default defineContentScript({
       tabNames.forEach((tabName, index) => {
         const tab = document.createElement("div");
         tab.textContent = tabName;
+        tab.className = "code-tab";
+        console.log("Creating tab:", tabName, index);
+
         tab.style.cssText = `
           flex: 1;
-          padding: 8px 12px;
+          padding: 14px 16px;
           text-align: center;
           cursor: pointer;
-          border-right: 1px solid #404040;
-          background: ${index === 0 ? "#1e1e1e" : "#252526"};
+          border-right: 1px solid rgba(255, 255, 255, 0.1);
+          background: ${
+            index === 0
+              ? "rgba(255, 255, 255, 0.25)"
+              : "rgba(255, 255, 255, 0.05)"
+          };
           color: ${index === 0 ? "#fff" : "#ccc"};
-          font-weight: ${index === 0 ? "600" : "400"};
+          font-weight: ${index === 0 ? "700" : "600"};
+          font-size: 13px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
         `;
 
-        tab.onclick = () => switchTab(index);
+        // Add hover effect overlay
+        const tabOverlay = document.createElement("div");
+        tabOverlay.style.cssText = `
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+          transition: left 0.5s ease;
+          pointer-events: none;
+        `;
+        tab.appendChild(tabOverlay);
+
+        actionEvents.forEach((event) => {
+          tab.addEventListener(event, (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            setTimeout(() => {
+              tab.style.background =
+                index === 0
+                  ? "rgba(255, 255, 255, 0.25)"
+                  : "rgba(255, 255, 255, 0.05)";
+            }, 200);
+            switchTab(index);
+            console.log("Tab clicked:", tabName, index, event);
+          });
+        });
+
         tab.onmouseover = () => {
           if (index !== 0) {
-            tab.style.background = "#2d2d2d";
+            tab.style.background = "rgba(255, 255, 255, 0.15)";
+            tab.style.transform = "translateY(-1px)";
           }
+          tabOverlay.style.left = "100%";
         };
         tab.onmouseout = () => {
           if (index !== 0) {
-            tab.style.background = "#252526";
+            tab.style.background = "rgba(255, 255, 255, 0.05)";
+            tab.style.transform = "translateY(0)";
           }
+          tabOverlay.style.left = "-100%";
         };
 
         tabs.appendChild(tab);
+        console.log("Tab added to DOM:", tabName);
       });
 
       // Create content area
@@ -296,10 +436,14 @@ export default defineContentScript({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 6px 12px;
-          background: #2d2d2d;
-          border-bottom: 1px solid #404040;
-          font-size: 11px;
+          padding: 12px 20px;
+          background: rgba(30, 30, 30, 0.8);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          font-size: 13px;
+          font-weight: 600;
+          backdrop-filter: blur(10px);
+          position: relative;
+          z-index: 2;
         `;
 
         const codeTitle = document.createElement("span");
@@ -309,17 +453,47 @@ export default defineContentScript({
         copyBtn.textContent = "📋 Copy";
         copyBtn.setAttribute("data-copy", tabNames[index]);
         copyBtn.style.cssText = `
-          background: #007acc;
+          background: linear-gradient(135deg, #007acc, #005a9e);
           color: white;
           border: none;
-          padding: 4px 8px;
-          border-radius: 3px;
-          font-size: 10px;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
           cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
         `;
-        copyBtn.onclick = () => copyToClipboard(tabContent, tabNames[index]);
-        copyBtn.onmouseover = () => (copyBtn.style.background = "#005a9e");
-        copyBtn.onmouseout = () => (copyBtn.style.background = "#007acc");
+
+        actionEvents.forEach((event) => {
+          copyBtn.addEventListener(event, (e: MouseEvent | MouseEvent) => {
+            console.log("Copy button clicked:", event);
+            e.stopPropagation();
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            copyBtn.style.background = "green";
+            setTimeout(() => {
+              copyBtn.style.background =
+                "linear-gradient(135deg, #007acc, #005a9e)";
+            }, 200);
+            copyToClipboard(tabContent, tabNames[index]);
+          });
+        });
+
+        copyBtn.onmouseover = () => {
+          copyBtn.style.background =
+            "linear-gradient(135deg, #005a9e, #004080)";
+          copyBtn.style.transform = "translateY(-1px)";
+          copyBtn.style.boxShadow =
+            "0 4px 12px rgba(0, 122, 204, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)";
+        };
+        copyBtn.onmouseout = () => {
+          copyBtn.style.background =
+            "linear-gradient(135deg, #007acc, #005a9e)";
+          copyBtn.style.transform = "translateY(0)";
+          copyBtn.style.boxShadow =
+            "0 2px 8px rgba(0, 122, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)";
+        };
 
         codeHeader.appendChild(codeTitle);
         codeHeader.appendChild(copyBtn);
@@ -329,15 +503,18 @@ export default defineContentScript({
         codeEditor.style.cssText = `
           flex: 1;
           margin: 0;
-          padding: 12px;
-          background: #1e1e1e;
-          color: #d4d4d4;
-          font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-          font-size: 11px;
-          line-height: 1.4;
+          padding: 20px;
+          background: rgba(10, 10, 10, 0.6);
+          color: #e8e8e8;
+          font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
+          font-size: 12px;
+          line-height: 1.5;
           overflow: auto;
           white-space: pre-wrap;
           word-break: break-all;
+          backdrop-filter: blur(10px);
+          position: relative;
+          border-radius: 0 0 16px 16px;
         `;
 
         const code = document.createElement("code");
@@ -356,6 +533,52 @@ export default defineContentScript({
       codePanel.appendChild(panel);
       document.body.appendChild(codePanel);
 
+      // Add event delegation to tabs container as backup
+      tabs.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains("code-tab")) {
+          e.stopPropagation();
+          e.preventDefault();
+          const tabIndex = Array.from(
+            tabs.querySelectorAll(".code-tab")
+          ).indexOf(target);
+          console.log(
+            "Event delegation: Tab clicked via container, index:",
+            tabIndex
+          );
+          switchTab(tabIndex);
+        }
+      });
+
+      // Add event delegation for buttons as backup
+      panel.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement;
+        if (target.tagName === "BUTTON") {
+          e.stopPropagation();
+          e.preventDefault();
+          console.log(
+            "Event delegation: Button clicked via panel:",
+            target.textContent
+          );
+
+          // Handle close button
+          if (target.textContent === "×") {
+            removeCodePanel();
+          }
+
+          // Handle copy buttons
+          if (target.textContent?.includes("Copy")) {
+            const dataCopy = target.getAttribute("data-copy");
+            if (dataCopy) {
+              const tabIndex = tabNames.indexOf(dataCopy);
+              if (tabIndex !== -1) {
+                copyToClipboard(tabContents[tabIndex], dataCopy);
+              }
+            }
+          }
+        }
+      });
+
       // Add click outside to close
       codePanel.addEventListener("click", (e) => {
         if (e.target === codePanel) {
@@ -363,22 +586,51 @@ export default defineContentScript({
         }
       });
 
+      // Prevent code panel clicks from bubbling up
+      panel.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
+
+      // Prevent all clicks within the panel from triggering element selection
+      panel.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+      });
+
+      panel.addEventListener("mouseup", (e) => {
+        e.stopPropagation();
+      });
+
       function switchTab(tabIndex: number) {
+        console.log("Switching to tab:", tabIndex);
         activeTab = tabIndex;
 
         // Update tab styles
-        const tabElements = tabs.querySelectorAll("div");
+        const tabElements = tabs.querySelectorAll(".code-tab");
+        console.log("Found tab elements:", tabElements.length);
+
         tabElements.forEach((tab, index) => {
-          tab.style.background = index === tabIndex ? "#1e1e1e" : "#252526";
-          tab.style.color = index === tabIndex ? "#fff" : "#ccc";
-          tab.style.fontWeight = index === tabIndex ? "600" : "400";
+          const isActive = index === tabIndex;
+          console.log(`Tab ${index}: active = ${isActive}`);
+
+          (tab as HTMLElement).style.background = isActive
+            ? "rgba(255, 255, 255, 0.25)"
+            : "rgba(255, 255, 255, 0.05)";
+          (tab as HTMLElement).style.color = isActive ? "#fff" : "#ccc";
+          (tab as HTMLElement).style.fontWeight = isActive ? "700" : "600";
+          (tab as HTMLElement).style.transform = isActive
+            ? "translateY(-1px)"
+            : "translateY(0)";
+          (tab as HTMLElement).style.zIndex = "2";
         });
 
         // Update content
         const contentBlocks = content.querySelectorAll("[data-tab]");
+        console.log("Found content blocks:", contentBlocks.length);
+
         contentBlocks.forEach((block, index) => {
-          (block as HTMLElement).style.display =
-            index === tabIndex ? "flex" : "none";
+          const shouldShow = index === tabIndex;
+          console.log(`Content block ${index}: show = ${shouldShow}`);
+          (block as HTMLElement).style.display = shouldShow ? "flex" : "none";
         });
       }
 
@@ -395,7 +647,8 @@ export default defineContentScript({
                 (button as HTMLElement).style.background = "#4CAF50";
                 setTimeout(() => {
                   button.textContent = originalText;
-                  (button as HTMLElement).style.background = "#007acc";
+                  (button as HTMLElement).style.background =
+                    "linear-gradient(135deg, #007acc, #005a9e)";
                 }, 1000);
               }
             });
