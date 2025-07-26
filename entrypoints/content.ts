@@ -19,6 +19,7 @@ export default defineContentScript({
 
     // Listen for messages from popup
     browser.runtime.onMessage.addListener((message) => {
+      console.log("Content script received message:", message);
       if (message.type === "TOGGLE_ELEMENT_SELECTION") {
         isElementSelected = message.isElementSelected;
         if (isElementSelected && !popupIsOpen) {
@@ -61,6 +62,12 @@ export default defineContentScript({
       } else if (message.type === "HIDE_ELEMENTS_BY_SELECTOR") {
         hideElementsBySelector(message.selector);
       } else if (message.type === "CLONE_CODE_GENERATED") {
+        console.log("AI code generated successfully:", {
+          framework: message.framework,
+          description: message.description,
+          codeLength: message.code?.length || 0,
+        });
+        console.log("Full AI response code:", message.code);
         // Update the Clone with Jamiu tab with generated code
         updateCloneWithJamiuTab(
           message.code,
@@ -68,6 +75,7 @@ export default defineContentScript({
           message.description
         );
       } else if (message.type === "CLONE_CODE_ERROR") {
+        console.error("AI code generation failed:", message.error);
         // Show error in the Clone with Jamiu tab
         updateCloneWithJamiuTabWithError(message.error);
       }
@@ -299,7 +307,7 @@ export default defineContentScript({
         left: ${left}px;
         width: ${panelWidth}px;
         height: ${panelHeight}px;
-        background: rgba(10, 10, 10, 0.85);
+        background: rgba(40, 40, 40, 0.95);
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 12px;
         box-shadow: 
@@ -339,14 +347,15 @@ export default defineContentScript({
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 16px;
+        padding: 8px 12px;
         background: rgba(30, 30, 30, 0.8);
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        font-weight: 700;
-        font-size: 14px;
+        font-weight: 600;
+        font-size: 12px;
         backdrop-filter: blur(10px);
         position: relative;
         z-index: 2;
+        min-height: 36px;
       `;
 
       const title = document.createElement("span");
@@ -412,9 +421,9 @@ export default defineContentScript({
       // Initialize AI service
       const { default: aiService } = await import("./ai-service.ts");
 
-      // Generate AI clone code
+      // Generate AI clone code with loading state
       let cloneWithJamiu = `
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center; background: rgba(50, 50, 50, 0.8); border-radius: 8px;">
           <div style="margin-bottom: 16px;">
             <div style="width: 48px; height: 48px; border: 3px solid #007acc; border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
             <style>
@@ -424,8 +433,18 @@ export default defineContentScript({
               }
             </style>
           </div>
-          <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px;">🤖 Jamiu is analyzing...</h3>
-          <p style="margin: 0; color: #ccc; font-size: 12px;">Generating clone code for this element</p>
+          <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px; font-weight: 600;">🤖 Jamiu is working...</h3>
+          <p style="margin: 0; color: #ccc; font-size: 12px;">Analyzing element and generating code</p>
+          <p style="margin: 8px 0 0; color: #999; font-size: 10px;">This may take a few seconds</p>
+          <div style="margin-top: 16px; width: 100%; height: 2px; background: rgba(255, 255, 255, 0.1); border-radius: 1px; overflow: hidden;">
+            <div style="width: 30%; height: 100%; background: linear-gradient(90deg, #007acc, #005a9e); animation: loading 2s ease-in-out infinite;"></div>
+            <style>
+              @keyframes loading {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(400%); }
+              }
+            </style>
+          </div>
         </div>
       `;
 
@@ -448,11 +467,24 @@ export default defineContentScript({
         }
 
         // Send request to background script for AI generation
-        browser.runtime.sendMessage({
-          type: "GENERATE_CLONE_CODE",
-          elementAnalysis: elementAnalysis,
-          targetFramework: "html", // Default to HTML, can be made configurable
-        });
+        browser.runtime
+          .sendMessage({
+            type: "GENERATE_CLONE_CODE",
+            elementAnalysis: elementAnalysis,
+            targetFramework: "html", // Default to HTML, can be made configurable
+          })
+          .then(() => {
+            // Update loading state to show request sent
+            setTimeout(() => {
+              updateLoadingState("Request sent to AI service...");
+            }, 1000);
+          })
+          .catch((error) => {
+            console.error("Failed to send AI generation request:", error);
+            updateCloneWithJamiuTabWithError(
+              "Could not send AI generation request"
+            );
+          });
       } catch (error) {
         console.error("Failed to analyze element:", error);
         cloneWithJamiu = `
@@ -478,7 +510,7 @@ export default defineContentScript({
 
         tab.style.cssText = `
           flex: 1;
-          padding: 10px 12px;
+          padding: 6px 8px;
           text-align: center;
           cursor: pointer;
           border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -488,11 +520,15 @@ export default defineContentScript({
               : "rgba(255, 255, 255, 0.05)"
           };
           color: ${index === 0 ? "#fff" : "#ccc"};
-          font-weight: ${index === 0 ? "700" : "600"};
-          font-size: 12px;
+          font-weight: ${index === 0 ? "600" : "500"};
+          font-size: 10px;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
+          min-height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         `;
 
         // Add hover effect overlay
@@ -573,14 +609,15 @@ export default defineContentScript({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 8px 16px;
-          background: rgba(30, 30, 30, 0.8);
+          padding: 6px 12px;
+          background: rgba(60, 60, 60, 0.9);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          font-size: 12px;
-          font-weight: 600;
+          font-size: 10px;
+          font-weight: 500;
           backdrop-filter: blur(10px);
           position: relative;
           z-index: 2;
+          min-height: 28px;
         `;
 
         const codeTitle = document.createElement("span");
@@ -593,11 +630,12 @@ export default defineContentScript({
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: #fff;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            margin-right: 8px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            margin-right: 6px;
             cursor: pointer;
+            height: 20px;
           `;
 
           const frameworks = [
@@ -618,13 +656,33 @@ export default defineContentScript({
             const target = e.target as HTMLSelectElement;
             currentFramework = target.value;
 
+            // Show loading state immediately
+            updateLoadingState(
+              `Generating ${currentFramework.toUpperCase()} code...`
+            );
+
             // Regenerate code with new framework
             if (currentHoveredElement && elementAnalysis) {
-              browser.runtime.sendMessage({
-                type: "GENERATE_CLONE_CODE",
-                elementAnalysis: elementAnalysis,
-                targetFramework: currentFramework,
-              });
+              browser.runtime
+                .sendMessage({
+                  type: "GENERATE_CLONE_CODE",
+                  elementAnalysis: elementAnalysis,
+                  targetFramework: currentFramework,
+                })
+                .then(() => {
+                  // Update loading state to show request sent
+                  setTimeout(() => {
+                    updateLoadingState(
+                      `Request sent to AI service for ${currentFramework.toUpperCase()}...`
+                    );
+                  }, 1000);
+                })
+                .catch((error) => {
+                  console.error("Failed to send AI generation request:", error);
+                  updateCloneWithJamiuTabWithError(
+                    "Could not send AI generation request"
+                  );
+                });
             }
           });
 
@@ -638,13 +696,14 @@ export default defineContentScript({
           background: linear-gradient(135deg, #007acc, #005a9e);
           color: white;
           border: none;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 9px;
+          font-weight: 500;
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+          height: 20px;
         `;
 
         actionEvents.forEach((event) => {
@@ -686,17 +745,19 @@ export default defineContentScript({
           flex: 1;
           margin: 0;
           padding: 12px 16px;
-          background: rgba(10, 10, 10, 0.6);
+          background: rgba(50, 50, 50, 0.8);
           color: #e8e8e8;
           font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
           font-size: 10px;
           line-height: 1.4;
           overflow: auto;
           white-space: pre-wrap;
-          word-break: break-all;
+          word-break: break-word;
           backdrop-filter: blur(10px);
           position: relative;
           border-radius: 0 0 12px 12px;
+          max-height: none;
+          min-height: 200px;
         `;
 
         const code = document.createElement("code");
@@ -1277,6 +1338,12 @@ export default defineContentScript({
       framework: string,
       description: string
     ) {
+      console.log("Updating Clone with Jamiu tab:", {
+        codeLength: code?.length || 0,
+        framework,
+        description,
+      });
+
       const codePanel = document.getElementById("dommy-code-panel");
       if (!codePanel) return;
 
@@ -1286,15 +1353,74 @@ export default defineContentScript({
       if (cloneTab) {
         const codeEditor = cloneTab.querySelector("pre code");
         if (codeEditor) {
+          console.log(
+            "Code before highlighting:",
+            code?.substring(0, 200) + "..."
+          );
           // Add syntax highlighting
           const highlightedCode = highlightSyntax(code, framework);
+          console.log(
+            "Code after highlighting:",
+            highlightedCode?.substring(0, 200) + "..."
+          );
           codeEditor.innerHTML = highlightedCode;
+
+          // Ensure the code is fully visible
+          (codeEditor as HTMLElement).style.whiteSpace = "pre-wrap";
+          (codeEditor as HTMLElement).style.wordBreak = "break-word";
+          (codeEditor as HTMLElement).style.overflowWrap = "break-word";
 
           // Update the tab title to show it's loaded
           const tabTitle = cloneTab.querySelector("span");
           if (tabTitle) {
             tabTitle.textContent = `Clone with Jamiu 🤖 (${framework})`;
           }
+
+          // Scroll to top to show the beginning of the code
+          const preElement = codeEditor.closest("pre");
+          if (preElement) {
+            preElement.scrollTop = 0;
+          }
+        }
+      }
+    }
+
+    // Helper function to update the loading state with progress
+    function updateLoadingState(message: string) {
+      const codePanel = document.getElementById("dommy-code-panel");
+      if (!codePanel) return;
+
+      const contentBlocks = codePanel.querySelectorAll("[data-tab]");
+      const cloneTab = contentBlocks[0]; // First tab is Clone with Jamiu
+
+      if (cloneTab) {
+        const codeEditor = cloneTab.querySelector("pre code");
+        if (codeEditor) {
+          codeEditor.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center; background: rgba(50, 50, 50, 0.8); border-radius: 8px;">
+              <div style="margin-bottom: 16px;">
+                <div style="width: 48px; height: 48px; border: 3px solid #007acc; border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                <style>
+                  @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                  }
+                </style>
+              </div>
+              <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px; font-weight: 600;">🤖 Jamiu is working...</h3>
+              <p style="margin: 0; color: #ccc; font-size: 12px;">${message}</p>
+              <p style="margin: 8px 0 0; color: #999; font-size: 10px;">This may take a few seconds</p>
+              <div style="margin-top: 16px; width: 100%; height: 2px; background: rgba(255, 255, 255, 0.1); border-radius: 1px; overflow: hidden;">
+                <div style="width: 30%; height: 100%; background: linear-gradient(90deg, #007acc, #005a9e); animation: loading 2s ease-in-out infinite;"></div>
+                <style>
+                  @keyframes loading {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(400%); }
+                  }
+                </style>
+              </div>
+            </div>
+          `;
         }
       }
     }

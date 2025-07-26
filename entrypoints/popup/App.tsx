@@ -97,23 +97,6 @@ function App() {
     }
   };
 
-  const takeScreenshot = async () => {
-    if (!currentElement) {
-      alert("No element selected. Click on an element first.");
-      return;
-    }
-
-    const tabs = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tabs[0]?.id) {
-      await browser.tabs.sendMessage(tabs[0].id, {
-        type: "TAKE_ELEMENT_SCREENSHOT",
-      });
-    }
-  };
-
   return (
     <div className="app" ref={appRef} tabIndex={0}>
       <div className="header">
@@ -163,8 +146,7 @@ function App() {
           <li>Toggle on "Element Selection"</li>
           <li>Click on any element on the page</li>
           <li>View the element's code in the pane below</li>
-          <li>Copy HTML, CSS, or JavaScript as needed</li>
-          <li>Click "Screenshot Element" to capture it</li>
+          <li>Copy the code as needed</li>
         </ol>
       </div>
     </div>

@@ -87,7 +87,43 @@ class AIService {
     }
 
     const data = await response.json();
-    return data.result.response;
+    console.log("AI Response:", data);
+
+    // Parse markdown response to extract clean code
+    let cleanResponse = data.result.response;
+
+    // Extract code from markdown code blocks while preserving structure
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    const matches = [...cleanResponse.matchAll(codeBlockRegex)];
+
+    if (matches.length > 0) {
+      // If we have code blocks, extract and combine them
+      cleanResponse = matches
+        .map((match) => {
+          const language = match[1] || "html";
+          const code = match[2].trim();
+          return `<!-- ${language.toUpperCase()} Code -->\n${code}`;
+        })
+        .join("\n\n");
+    } else {
+      // If no code blocks, just clean up the response
+      cleanResponse = cleanResponse
+        .replace(/```[\w]*\n/g, "")
+        .replace(/```/g, "");
+    }
+
+    // Clean up any remaining markdown formatting
+    cleanResponse = cleanResponse.replace(
+      /^\s*<!--\s*([^>]+)\s*-->\s*$/gm,
+      "<!-- $1 -->"
+    );
+
+    // Trim extra whitespace
+    cleanResponse = cleanResponse.trim();
+
+    console.log("Cleaned response:", cleanResponse.substring(0, 200) + "...");
+
+    return cleanResponse;
   }
 
   async generateCloneCode(request: CloneRequest): Promise<CloneResponse> {
@@ -114,10 +150,16 @@ class AIService {
 
     try {
       // Use Cloudflare's @cf/meta/llama-3.1-8b-instruct model
-      const response = await this.makeRequest(
-        "@cf/meta/llama-3.1-8b-instruct",
-        prompt
-      );
+      const response = await this.makeRequest("@cf/qwen/qwq-32b", prompt);
+
+      console.log("AI Response received:", {
+        responseLength: response?.length || 0,
+        responsePreview: response?.substring(0, 200) + "...",
+        isComplete:
+          response?.includes("</html>") ||
+          response?.includes("}") ||
+          response?.includes("</script>"),
+      });
 
       return {
         code: response,
@@ -138,98 +180,60 @@ class AIService {
   ): string {
     console.log({ element });
     const elementInfo = `
-Element Analysis:
-- Tag: ${element?.tagName}
-- Classes: ${element?.className}
-- ID: ${element?.id}
-- Text Content: ${element?.textContent?.substring(0, 100)}${
-      element?.textContent?.length > 100 ? "..." : ""
+Element: ${element?.tagName}${element?.id ? `#${element.id}` : ""}${
+      element?.className ? `.${element.className}` : ""
     }
-- Position: ${
+Text: ${element?.textContent?.substring(0, 50) || "None"}
+Size: ${
       element?.position
-        ? `${element.position.width}x${element.position.height} at (${element.position.x}, ${element.position.y})`
-        : "Unknown position"
+        ? `${element.position.width}x${element.position.height}`
+        : "Unknown"
     }
-- Key Styles: ${
+Styles: ${
       element?.computedStyles
         ? Object.entries(element.computedStyles)
-            .slice(0, 10)
-            .map(([k, v]) => `${k}: ${v}`)
+            .slice(0, 5)
+            .map(([k, v]) => `${k}:${v}`)
             .join(", ")
-        : "No styles"
+        : "None"
     }
-- Attributes: ${
-      element?.attributes
-        ? Object.entries(element.attributes)
-            .map(([k, v]) => `${k}="${v}"`)
-            .join(" ")
-        : "No attributes"
-    }
-- Children: ${element?.children?.length || 0} child elements
 `;
 
     const frameworkInstructions = this.getFrameworkInstructions(framework);
 
-    return `You are Jamiu, an expert web developer and UI/UX specialist. Your task is to generate clean, reusable code to clone the following HTML element.
+    return `You are Jamiu, an expert web developer. Generate ${framework.toUpperCase()} code to clone this element:
 
 ${elementInfo}
 
 Requirements:
-- Generate ${framework.toUpperCase()} code that recreates this element
-- Make the code production-ready and well-structured
-- Include all necessary styling to match the original appearance
-- Add helpful comments explaining the code
-- Ensure the code is accessible and follows best practices
-- If there are interactions or animations, include them
-- Make the code responsive and maintainable
+- Generate ONLY the main component code (HTML structure)
+- Keep CSS minimal and inline if needed
+- Focus on the core structure and functionality
+- Make it responsive and accessible
+- Add brief comments
 
 ${frameworkInstructions}
 
-Please provide only the code without any explanations before or after. The code should be ready to use immediately.`;
+Provide ONLY the code, no explanations. Keep it concise but complete.`;
   }
 
   private getFrameworkInstructions(framework: string): string {
     switch (framework) {
       case "react":
         return `
-React Instructions:
-- Use functional components with hooks
-- Include proper TypeScript types if applicable
-- Use modern React patterns (useState, useEffect, etc.)
-- Include CSS-in-JS or styled-components for styling
-- Make the component reusable and configurable
-- Export the component properly`;
+React: Use functional component with hooks, export properly`;
 
       case "vue":
         return `
-Vue Instructions:
-- Use Vue 3 Composition API
-- Include proper TypeScript types if applicable
-- Use scoped styles or CSS modules
-- Make the component reusable and configurable
-- Include proper props and emits
-- Export the component properly`;
+Vue: Use Vue 3 Composition API, export properly`;
 
       case "svelte":
         return `
-Svelte Instructions:
-- Use modern Svelte syntax
-- Include proper TypeScript types if applicable
-- Use scoped styles
-- Make the component reusable and configurable
-- Include proper props and events
-- Export the component properly`;
+Svelte: Use modern syntax, export properly`;
 
       default: // html/vanilla
         return `
-HTML/CSS/JS Instructions:
-- Use semantic HTML5 elements
-- Include all necessary CSS for styling
-- Use modern CSS features (Flexbox, Grid, etc.)
-- Include JavaScript for any interactions
-- Make the code responsive
-- Use BEM or similar naming conventions
-- Include proper accessibility attributes`;
+HTML: Use semantic elements, tailwind CSS, responsive design`;
     }
   }
 

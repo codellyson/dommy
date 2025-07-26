@@ -43,15 +43,28 @@ export default defineBackground(() => {
           includeInteractions: true,
         });
 
+        console.log("Background: AI response received:", {
+          codeLength: response.code?.length || 0,
+          framework: response.framework,
+          description: response.description,
+        });
+
         // Send the generated code back to the content script
         if (sender.tab?.id) {
-          await browser.tabs.sendMessage(sender.tab.id, {
+          const message = {
             type: "CLONE_CODE_GENERATED",
             code: response.code,
             framework: response.framework,
             description: response.description,
             dependencies: response.dependencies,
+          };
+
+          console.log("Background: Sending message to content script:", {
+            messageType: message.type,
+            codeLength: message.code?.length || 0,
           });
+
+          await browser.tabs.sendMessage(sender.tab.id, message);
         }
       } catch (error) {
         console.error("Failed to generate clone code:", error);
