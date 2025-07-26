@@ -7,14 +7,7 @@ declare const browser: any;
 function App() {
   const [isElementSelected, setIsElementSelected] = useState(false);
   const [currentElement, setCurrentElement] = useState<string | null>(null);
-  const [elementCode, setElementCode] = useState<{
-    html: string;
-    css: string;
-    javascript: string;
-  } | null>(null);
-  const [activeTab, setActiveTab] = useState("html");
-  const [isOutOfView, setIsOutOfView] = useState(false);
-  const codeBlockRef = useRef<HTMLDivElement>(null);
+
   const appRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,11 +20,8 @@ function App() {
     browser.runtime.onMessage.addListener((message: any) => {
       if (message.type === "ELEMENT_CLICKED") {
         setCurrentElement(message.elementInfo);
-        setElementCode(message.elementCode);
-        setActiveTab("html"); // Reset to HTML tab when new element is selected
       } else if (message.type === "ELEMENT_UNCLICKED") {
         setCurrentElement(null);
-        setElementCode(null);
       }
     });
 
@@ -87,84 +77,6 @@ function App() {
     };
   }, []);
 
-  // Collision detection effect
-  useEffect(() => {
-    const checkCollision = () => {
-      if (!codeBlockRef.current || !appRef.current) return;
-
-      const codeBlock = codeBlockRef.current;
-      const app = appRef.current;
-
-      const codeBlockRect = codeBlock.getBoundingClientRect();
-      const appRect = app.getBoundingClientRect();
-
-      // Check if code block is going out of the app container's view
-      const isOutOfBounds =
-        codeBlockRect.bottom > appRect.bottom ||
-        codeBlockRect.top < appRect.top ||
-        codeBlockRect.right > appRect.right ||
-        codeBlockRect.left < appRect.left;
-
-      setIsOutOfView(isOutOfBounds);
-    };
-
-    // Check collision on mount and when element code changes
-    checkCollision();
-
-    // Set up resize observer to monitor size changes
-    const resizeObserver = new ResizeObserver(checkCollision);
-    if (codeBlockRef.current) {
-      resizeObserver.observe(codeBlockRef.current);
-    }
-    if (appRef.current) {
-      resizeObserver.observe(appRef.current);
-    }
-
-    // Set up scroll listener for the app container
-    const handleScroll = () => {
-      setTimeout(checkCollision, 100); // Small delay to ensure DOM updates
-    };
-
-    const appElement = appRef.current;
-    if (appElement) {
-      appElement.addEventListener("scroll", handleScroll);
-    }
-
-    // Cleanup
-    return () => {
-      resizeObserver.disconnect();
-      if (appElement) {
-        appElement.removeEventListener("scroll", handleScroll);
-      }
-    };
-  }, [elementCode, activeTab]);
-
-  // Keep popup focused effect
-  useEffect(() => {
-    const keepFocused = () => {
-      if (appRef.current) {
-        appRef.current.focus();
-      }
-    };
-
-    // Keep focus on the popup
-    const focusInterval = setInterval(keepFocused, 100);
-
-    // Also focus on any click
-    const handleWindowClick = () => {
-      setTimeout(keepFocused, 10);
-    };
-
-    window.addEventListener("click", handleWindowClick);
-    window.addEventListener("mousedown", handleWindowClick);
-
-    return () => {
-      clearInterval(focusInterval);
-      window.removeEventListener("click", handleWindowClick);
-      window.removeEventListener("mousedown", handleWindowClick);
-    };
-  }, []);
-
   const toggleHoverMode = async () => {
     const newState = !isElementSelected;
     setIsElementSelected(newState);
@@ -202,37 +114,26 @@ function App() {
     }
   };
 
-  const copyToClipboard = async (text: string, type: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      // Show a brief success message
-      const button = document.querySelector(
-        `[data-copy="${type}"]`
-      ) as HTMLButtonElement;
-      if (button) {
-        const originalText = button.textContent;
-        button.textContent = "Copied!";
-        button.style.background = "#4CAF50";
-        setTimeout(() => {
-          button.textContent = originalText;
-          button.style.background = "";
-        }, 1000);
-      }
-    } catch (error) {
-      console.error("Failed to copy to clipboard:", error);
-    }
-  };
-
-  const switchTab = (tabName: string) => {
-    console.log("Switching to tab:", tabName);
-    setActiveTab(tabName);
-  };
-
   return (
     <div className="app" ref={appRef} tabIndex={0}>
       <div className="header">
-        <h1>Dommy</h1>
-        <p>DOM Element Developer Tool</p>
+        <div className="header-content">
+          <div>
+            <h1>Dommy</h1>
+            <p>DOM Element Developer Tool</p>
+          </div>
+          <button
+            className="settings-link"
+            onClick={() =>
+              browser.tabs.create({
+                url: browser.runtime.getURL("settings.html"),
+              })
+            }
+            title="Open Settings"
+          >
+            ⚙️
+          </button>
+        </div>
       </div>
 
       <div className="controls">
@@ -253,23 +154,6 @@ function App() {
               ? "Click on elements to select them"
               : "Enable to start selecting elements"}
           </p>
-        </div>
-
-        <div className="screenshot-section">
-          <button
-            className="screenshot-btn"
-            onClick={takeScreenshot}
-            disabled={!currentElement}
-          >
-            📸 Screenshot Element
-          </button>
-          {currentElement && (
-            <div className="element-info">
-              <p>
-                Selected: <code>{currentElement}</code>
-              </p>
-            </div>
-          )}
         </div>
       </div>
 

@@ -19,7 +19,7 @@ export default defineBackground(() => {
   });
 
   // Handle messages from content scripts
-  browser.runtime.onMessage.addListener((message, sender) => {
+  browser.runtime.onMessage.addListener(async (message, sender) => {
     if (
       message.type === "ELEMENT_CLICKED" ||
       message.type === "ELEMENT_UNCLICKED"
@@ -28,6 +28,64 @@ export default defineBackground(() => {
       browser.runtime.sendMessage(message).catch(() => {
         // Popup might not be open, ignore error
       });
+    } else if (message.type === "GENERATE_CLONE_CODE") {
+      // Handle AI code generation requests
+      try {
+        const { elementAnalysis, targetFramework } = message;
+
+        // Import the AI service dynamically
+        const { default: aiService } = await import("./ai-service.ts");
+
+        const response = await aiService.generateCloneCode({
+          element: elementAnalysis,
+          targetFramework: targetFramework || "html",
+          includeStyles: true,
+          includeInteractions: true,
+        });
+
+        // Send the generated code back to the content script
+        if (sender.tab?.id) {
+          await browser.tabs.sendMessage(sender.tab.id, {
+            type: "CLONE_CODE_GENERATED",
+            code: response.code,
+            framework: response.framework,
+            description: response.description,
+            dependencies: response.dependencies,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to generate clone code:", error);
+
+        // Send error back to content script
+        if (sender.tab?.id) {
+          await browser.tabs.sendMessage(sender.tab.id, {
+            type: "CLONE_CODE_ERROR",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    } else if (message.type === "SET_API_TOKEN") {
+      // Handle API token setting
+      try {
+        const { default: aiService } = await import("./ai-service.ts");
+        await aiService.setApiToken(message.token, message.accountId);
+
+        // Send success response
+        if (sender.tab?.id) {
+          await browser.tabs.sendMessage(sender.tab.id, {
+            type: "API_TOKEN_SET_SUCCESS",
+          });
+        }
+      } catch (error) {
+        console.error("Failed to set API token:", error);
+
+        if (sender.tab?.id) {
+          await browser.tabs.sendMessage(sender.tab.id, {
+            type: "API_TOKEN_SET_ERROR",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
     }
   });
 });

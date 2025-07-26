@@ -50,6 +50,26 @@ export default defineContentScript({
         if (isElementSelected) {
           document.addEventListener("click", handleClick, true);
         }
+      } else if (message.type === "HIDE_ELEMENT_FROM_SCREENSHOT") {
+        if (currentHoveredElement) {
+          hideElementFromScreenshot(currentHoveredElement);
+        }
+      } else if (message.type === "SHOW_ELEMENT_IN_SCREENSHOT") {
+        if (currentHoveredElement) {
+          showElementInScreenshot(currentHoveredElement);
+        }
+      } else if (message.type === "HIDE_ELEMENTS_BY_SELECTOR") {
+        hideElementsBySelector(message.selector);
+      } else if (message.type === "CLONE_CODE_GENERATED") {
+        // Update the Clone with Jamiu tab with generated code
+        updateCloneWithJamiuTab(
+          message.code,
+          message.framework,
+          message.description
+        );
+      } else if (message.type === "CLONE_CODE_ERROR") {
+        // Show error in the Clone with Jamiu tab
+        updateCloneWithJamiuTabWithError(message.error);
       }
     });
 
@@ -60,6 +80,7 @@ export default defineContentScript({
       console.log("target", target);
       if (
         target &&
+        target.tagName &&
         target !== document.body &&
         target !== document.documentElement &&
         !target.closest("#dommy-code-panel") && // Don't select the code panel itself
@@ -98,7 +119,9 @@ export default defineContentScript({
 
         // Always show content script code panel, but make it smaller when popup is open
         console.log("Content script: Showing code panel");
-        showCodePanel(target, elementCode, popupIsOpen);
+        showCodePanel(target, elementCode, popupIsOpen).catch((error) => {
+          console.error("Failed to show code panel:", error);
+        });
       }
 
       event.preventDefault();
@@ -107,6 +130,11 @@ export default defineContentScript({
     }
 
     function highlightElement(element: HTMLElement) {
+      if (!element || !element.tagName) {
+        console.warn("Cannot highlight invalid element");
+        return;
+      }
+
       // Store original styles
       originalStyles[element.outerHTML] = element.style.cssText;
 
@@ -118,16 +146,66 @@ export default defineContentScript({
       element.style.zIndex = "999999";
       element.style.transform = "scale(1.02)";
       element.style.transition = "all 0.3s ease-in-out";
-      element.style.backgroundColor = "rgba(1, 152, 246, 0.1)";
+      element.style.backgroundColor = "transparent";
       element.style.backdropFilter = "blur(10px)";
       element.style.borderRadius = "8px";
       element.style.boxShadow =
         "0 8px 32px rgba(0, 0, 0, 0.3), " +
         "inset 0 1px 0 rgba(255, 255, 255, 0.1), " +
         "0 0 0 1px rgba(255, 255, 255, 0.2)";
+
+      // Add camera button
+      const cameraBtn = document.createElement("div");
+      cameraBtn.id = "dommy-camera-btn";
+      hideElementFromScreenshot(cameraBtn);
+      cameraBtn.innerHTML = "📸";
+      cameraBtn.style.cssText = `
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 16px;
+        color: white;
+        box-shadow: 0 4px 12px rgba(238, 90, 36, 0.4);
+        transition: all 0.3s ease;
+        z-index: 999999;
+        backdrop-filter: blur(10px);
+      `;
+
+      cameraBtn.addEventListener("mouseover", () => {
+        cameraBtn.style.transform = "scale(1.1)";
+        cameraBtn.style.boxShadow = "0 6px 16px rgba(238, 90, 36, 0.6)";
+      });
+
+      cameraBtn.addEventListener("mouseout", () => {
+        cameraBtn.style.transform = "scale(1)";
+        cameraBtn.style.boxShadow = "0 4px 12px rgba(238, 90, 36, 0.4)";
+      });
+      actionEvents.forEach((event) => {
+        cameraBtn.addEventListener(event, (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          console.log("Camera button clicked");
+          takeScreenshot();
+        });
+      });
+      element.appendChild(cameraBtn);
     }
 
     function removeHighlight(element: HTMLElement) {
+      if (!element || !element.tagName) {
+        console.warn("Cannot remove highlight from invalid element");
+        return;
+      }
+
       const key = element.outerHTML;
       if (originalStyles[key]) {
         element.style.cssText = originalStyles[key];
@@ -145,18 +223,24 @@ export default defineContentScript({
         element.style.borderRadius = "";
         element.style.boxShadow = "";
       }
+
+      // Remove camera button
+      const cameraBtn = element.querySelector("#dommy-camera-btn");
+      if (cameraBtn) {
+        cameraBtn.remove();
+      }
     }
 
-    function showCodePanel(
+    async function showCodePanel(
       element: HTMLElement,
       elementCode: any,
       isPopupOpen: boolean
     ) {
-      // Remove any existing code panel first
       removeCodePanel();
 
       // Check if element is still valid
-      if (!element || !element.isConnected) {
+      if (!element || !element.tagName || !element.isConnected) {
+        console.warn("Cannot show code panel for invalid element");
         return;
       }
 
@@ -176,11 +260,11 @@ export default defineContentScript({
       // Get element position
       const rect = element.getBoundingClientRect();
 
-      // Adjust panel size based on popup state
+      // Adjust panel size based on popup state - make it more compact
       const panelWidth = isPopupOpen
-        ? Math.min(400, window.innerWidth - 40)
-        : Math.min(600, window.innerWidth - 40);
-      const panelHeight = isPopupOpen ? 300 : 400;
+        ? Math.min(350, window.innerWidth - 40)
+        : Math.min(500, window.innerWidth - 40);
+      const panelHeight = isPopupOpen ? 250 : 320;
 
       // Calculate position (below the element)
       let top = rect.bottom + 10;
@@ -215,22 +299,22 @@ export default defineContentScript({
         left: ${left}px;
         width: ${panelWidth}px;
         height: ${panelHeight}px;
-        background: rgba(10, 10, 10, 0.8);
+        background: rgba(10, 10, 10, 0.85);
         border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 16px;
+        border-radius: 12px;
         box-shadow: 
           0 8px 32px rgba(0, 0, 0, 0.4),
           inset 0 1px 0 rgba(255, 255, 255, 0.1),
           0 0 0 1px rgba(255, 255, 255, 0.05);
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
-        font-size: 12px;
+        font-size: 11px;
         color: #e8e8e8;
         pointer-events: auto;
         overflow: hidden;
         display: flex;
         flex-direction: column;
         opacity: ${isPopupOpen ? "0.9" : "1"};
-        backdrop-filter: blur(20px);
+        backdrop-filter: blur(25px);
         position: relative;
       `;
 
@@ -255,11 +339,11 @@ export default defineContentScript({
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 16px 20px;
+        padding: 10px 16px;
         background: rgba(30, 30, 30, 0.8);
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         font-weight: 700;
-        font-size: 16px;
+        font-size: 14px;
         backdrop-filter: blur(10px);
         position: relative;
         z-index: 2;
@@ -277,15 +361,15 @@ export default defineContentScript({
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.2);
         color: #fff;
-        font-size: 18px;
+        font-size: 16px;
         cursor: pointer;
-        padding: 4px 8px;
-        width: 24px;
-        height: 24px;
+        padding: 2px 6px;
+        width: 20px;
+        height: 20px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 6px;
+        border-radius: 4px;
         transition: all 0.3s ease;
         backdrop-filter: blur(10px);
       `;
@@ -325,13 +409,66 @@ export default defineContentScript({
         position: relative;
         z-index: 2;
       `;
+      // Initialize AI service
+      const { default: aiService } = await import("./ai-service.ts");
 
-      const tabNames = ["HTML", "CSS", "JavaScript"];
-      const tabContents = [
-        elementCode.html,
-        elementCode.css,
-        elementCode.javascript,
-      ];
+      // Generate AI clone code
+      let cloneWithJamiu = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
+          <div style="margin-bottom: 16px;">
+            <div style="width: 48px; height: 48px; border: 3px solid #007acc; border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+            <style>
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            </style>
+          </div>
+          <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px;">🤖 Jamiu is analyzing...</h3>
+          <p style="margin: 0; color: #ccc; font-size: 12px;">Generating clone code for this element</p>
+        </div>
+      `;
+
+      // Start AI code generation
+      let elementAnalysis: any = null;
+      try {
+        elementAnalysis = await aiService.analyzeElement(element);
+
+        // Check if AI features are enabled
+        const result = await browser.storage.local.get(["aiFeaturesEnabled"]);
+        if (result.aiFeaturesEnabled === false) {
+          cloneWithJamiu = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
+              <div style="margin-bottom: 16px; color: #ff6b6b; font-size: 24px;">🔒</div>
+              <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px;">AI Features Disabled</h3>
+              <p style="margin: 0; color: #ccc; font-size: 12px;">Enable AI features in settings to use Jamiu</p>
+            </div>
+          `;
+          return;
+        }
+
+        // Send request to background script for AI generation
+        browser.runtime.sendMessage({
+          type: "GENERATE_CLONE_CODE",
+          elementAnalysis: elementAnalysis,
+          targetFramework: "html", // Default to HTML, can be made configurable
+        });
+      } catch (error) {
+        console.error("Failed to analyze element:", error);
+        cloneWithJamiu = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
+            <div style="margin-bottom: 16px; color: #ff6b6b; font-size: 24px;">⚠️</div>
+            <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px;">Analysis Failed</h3>
+            <p style="margin: 0; color: #ccc; font-size: 12px;">Could not analyze element</p>
+          </div>
+        `;
+      }
+
+      const tabNames = ["Clone with Jamiu 🤖", "HTML"];
+      const tabContents = [cloneWithJamiu, elementCode.html];
+
+      // Add framework selector for AI generation
+      let currentFramework = "html";
 
       tabNames.forEach((tabName, index) => {
         const tab = document.createElement("div");
@@ -341,7 +478,7 @@ export default defineContentScript({
 
         tab.style.cssText = `
           flex: 1;
-          padding: 14px 16px;
+          padding: 10px 12px;
           text-align: center;
           cursor: pointer;
           border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -352,7 +489,7 @@ export default defineContentScript({
           };
           color: ${index === 0 ? "#fff" : "#ccc"};
           font-weight: ${index === 0 ? "700" : "600"};
-          font-size: 13px;
+          font-size: 12px;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
@@ -436,10 +573,10 @@ export default defineContentScript({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 12px 20px;
+          padding: 8px 16px;
           background: rgba(30, 30, 30, 0.8);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           backdrop-filter: blur(10px);
           position: relative;
@@ -449,6 +586,51 @@ export default defineContentScript({
         const codeTitle = document.createElement("span");
         codeTitle.textContent = tabNames[index];
 
+        // Add framework selector for Clone with Jamiu tab
+        if (index === 0) {
+          const frameworkSelector = document.createElement("select");
+          frameworkSelector.style.cssText = `
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-right: 8px;
+            cursor: pointer;
+          `;
+
+          const frameworks = [
+            { value: "html", label: "HTML/CSS/JS" },
+            { value: "react", label: "React" },
+            { value: "vue", label: "Vue" },
+            { value: "svelte", label: "Svelte" },
+          ];
+
+          frameworks.forEach((framework) => {
+            const option = document.createElement("option");
+            option.value = framework.value;
+            option.textContent = framework.label;
+            frameworkSelector.appendChild(option);
+          });
+
+          frameworkSelector.addEventListener("change", (e) => {
+            const target = e.target as HTMLSelectElement;
+            currentFramework = target.value;
+
+            // Regenerate code with new framework
+            if (currentHoveredElement && elementAnalysis) {
+              browser.runtime.sendMessage({
+                type: "GENERATE_CLONE_CODE",
+                elementAnalysis: elementAnalysis,
+                targetFramework: currentFramework,
+              });
+            }
+          });
+
+          codeHeader.appendChild(frameworkSelector);
+        }
+
         const copyBtn = document.createElement("button");
         copyBtn.textContent = "📋 Copy";
         copyBtn.setAttribute("data-copy", tabNames[index]);
@@ -456,9 +638,9 @@ export default defineContentScript({
           background: linear-gradient(135deg, #007acc, #005a9e);
           color: white;
           border: none;
-          padding: 6px 12px;
-          border-radius: 6px;
-          font-size: 11px;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 10px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -503,22 +685,24 @@ export default defineContentScript({
         codeEditor.style.cssText = `
           flex: 1;
           margin: 0;
-          padding: 20px;
+          padding: 12px 16px;
           background: rgba(10, 10, 10, 0.6);
           color: #e8e8e8;
           font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
-          font-size: 12px;
-          line-height: 1.5;
+          font-size: 10px;
+          line-height: 1.4;
           overflow: auto;
           white-space: pre-wrap;
           word-break: break-all;
           backdrop-filter: blur(10px);
           position: relative;
-          border-radius: 0 0 16px 16px;
+          border-radius: 0 0 12px 12px;
         `;
 
         const code = document.createElement("code");
-        code.textContent = tabContent;
+        // Add syntax highlighting
+        const highlightedCode = highlightSyntax(tabContent, tabNames[index]);
+        code.innerHTML = highlightedCode;
         codeEditor.appendChild(code);
 
         codeBlock.appendChild(codeHeader);
@@ -553,7 +737,7 @@ export default defineContentScript({
       // Add event delegation for buttons as backup
       panel.addEventListener("click", (e) => {
         const target = e.target as HTMLElement;
-        if (target.tagName === "BUTTON") {
+        if (target && target.tagName === "BUTTON") {
           e.stopPropagation();
           e.preventDefault();
           console.log(
@@ -667,6 +851,10 @@ export default defineContentScript({
     }
 
     function getElementInfo(element: HTMLElement): string {
+      if (!element || !element.tagName) {
+        return "Unknown element";
+      }
+
       const tagName = element.tagName.toLowerCase();
       const id = element.id ? `#${element.id}` : "";
       const classes = Array.from(element.classList)
@@ -678,6 +866,14 @@ export default defineContentScript({
     }
 
     function extractElementCode(element: HTMLElement) {
+      if (!element || !element.tagName) {
+        return {
+          html: "<!-- Invalid element -->",
+          css: "/* No styles available */",
+          javascript: "// No JavaScript available",
+        };
+      }
+
       return {
         html: extractHTML(element),
         css: extractCSS(element),
@@ -686,6 +882,10 @@ export default defineContentScript({
     }
 
     function extractHTML(element: HTMLElement): string {
+      if (!element || !element.tagName) {
+        return "<!-- Invalid element -->";
+      }
+
       // Get the outer HTML of the element
       let html = element.outerHTML;
 
@@ -696,6 +896,10 @@ export default defineContentScript({
     }
 
     function extractCSS(element: HTMLElement): string {
+      if (!element || !element.tagName) {
+        return "/* Invalid element */";
+      }
+
       const styles: string[] = [];
 
       // Get computed styles
@@ -756,6 +960,10 @@ export default defineContentScript({
     }
 
     function extractJavaScript(element: HTMLElement): string {
+      if (!element || !element.tagName) {
+        return "// Invalid element";
+      }
+
       const js: string[] = [];
 
       // Get event listeners (if possible)
@@ -860,6 +1068,111 @@ export default defineContentScript({
       return rules;
     }
 
+    function highlightSyntax(code: string, language: string): string {
+      // Basic syntax highlighting
+      let highlighted = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+      if (language === "HTML") {
+        // HTML highlighting
+        highlighted = highlighted
+          .replace(
+            /(&lt;\/?)([a-zA-Z][a-zA-Z0-9]*)([^&]*?)(&gt;)/g,
+            '<span style="color: #569cd6;">$1$2</span><span style="color: #d4d4d4;">$3</span><span style="color: #569cd6;">$4</span>'
+          )
+          .replace(/([a-zA-Z-]+)=/g, '<span style="color: #9cdcfe;">$1</span>=')
+          .replace(
+            /(&quot;[^&]*&quot;)/g,
+            '<span style="color: #ce9178;">$1</span>'
+          )
+          .replace(
+            /(#[a-zA-Z0-9]+)/g,
+            '<span style="color: #b5cea8;">$1</span>'
+          )
+          .replace(
+            /(\.[a-zA-Z0-9-]+)/g,
+            '<span style="color: #4ec9b0;">$1</span>'
+          );
+      } else if (language === "CSS") {
+        // CSS highlighting
+        highlighted = highlighted
+          .replace(
+            /([a-zA-Z-]+)(?=\s*:)/g,
+            '<span style="color: #9cdcfe;">$1</span>'
+          )
+          .replace(/(:)/g, '<span style="color: #d4d4d4;">$1</span>')
+          .replace(/(;)/g, '<span style="color: #d4d4d4;">$1</span>')
+          .replace(/(\{)/g, '<span style="color: #d4d4d4;">$1</span>')
+          .replace(/(\})/g, '<span style="color: #d4d4d4;">$1</span>')
+          .replace(
+            /(#[a-fA-F0-9]{3,6})/g,
+            '<span style="color: #b5cea8;">$1</span>'
+          )
+          .replace(
+            /(rgba?\([^)]+\))/g,
+            '<span style="color: #b5cea8;">$1</span>'
+          )
+          .replace(
+            /(\d+px|\d+em|\d+rem|\d+%)/g,
+            '<span style="color: #b5cea8;">$1</span>'
+          )
+          .replace(
+            /(\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/)/g,
+            '<span style="color: #6a9955;">$1</span>'
+          );
+      } else if (language === "JavaScript") {
+        // JavaScript highlighting
+        highlighted = highlighted
+          .replace(
+            /\b(function|var|let|const|if|else|for|while|return|new|class|extends|import|export|default|async|await)\b/g,
+            '<span style="color: #569cd6;">$1</span>'
+          )
+          .replace(
+            /\b(true|false|null|undefined)\b/g,
+            '<span style="color: #569cd6;">$1</span>'
+          )
+          .replace(/(\d+)/g, '<span style="color: #b5cea8;">$1</span>')
+          .replace(
+            /(&quot;[^&]*&quot;)/g,
+            '<span style="color: #ce9178;">$1</span>'
+          )
+          .replace(/(\/\/.*)/g, '<span style="color: #6a9955;">$1</span>')
+          .replace(
+            /(\/\*[\s\S]*?\*\/)/g,
+            '<span style="color: #6a9955;">$1</span>'
+          );
+      }
+
+      return highlighted;
+    }
+
+    // Utility function to hide elements from screenshots
+    function hideElementFromScreenshot(element: HTMLElement) {
+      element.classList.add("dommy-hide-from-screenshot");
+      console.log("Element hidden from screenshots:", element);
+    }
+
+    // Utility function to show elements in screenshots again
+    function showElementInScreenshot(element: HTMLElement) {
+      element.classList.remove("dommy-hide-from-screenshot");
+      console.log("Element shown in screenshots:", element);
+    }
+
+    // Utility function to hide elements by selector
+    function hideElementsBySelector(selector: string) {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach((el) => {
+        (el as HTMLElement).classList.add("dommy-hide-from-screenshot");
+      });
+      console.log(
+        `Hidden ${elements.length} elements with selector: ${selector}`
+      );
+    }
+
     async function takeScreenshot() {
       if (!currentHoveredElement) {
         console.log("No element selected for screenshot");
@@ -881,6 +1194,63 @@ export default defineContentScript({
           allowTaint: true,
           width: rect.width,
           height: rect.height,
+          // Hide elements with specific classes or attributes
+          ignoreElements: (element) => {
+            // Hide elements with class 'dommy-hide-from-screenshot'
+            if (element.classList.contains("dommy-hide-from-screenshot")) {
+              return true;
+            }
+            // Hide elements with data attribute 'data-dommy-hide'
+            if (element.hasAttribute("data-dommy-hide")) {
+              return true;
+            }
+            // Hide elements with specific IDs (customize as needed)
+            const hideIds = ["cookie-banner", "ad-banner", "popup-overlay"];
+            if (element.id && hideIds.includes(element.id)) {
+              return true;
+            }
+            return false;
+          },
+          // Additional processing on the cloned DOM
+          onclone: (clonedDoc) => {
+            // Hide elements with specific selectors
+            const selectorsToHide = [
+              ".advertisement",
+              ".banner",
+              ".popup",
+              ".modal",
+              ".cookie-notice",
+              ".newsletter-signup",
+              ".social-share",
+              ".floating-button",
+            ];
+
+            selectorsToHide.forEach((selector) => {
+              const elements = clonedDoc.querySelectorAll(selector);
+              elements.forEach((el) => {
+                (el as HTMLElement).style.display = "none";
+              });
+            });
+
+            // Hide elements with specific text content
+            const textToHide = [
+              "cookie",
+              "advertisement",
+              "subscribe",
+              "newsletter",
+            ];
+            const allElements = clonedDoc.querySelectorAll("*");
+            allElements.forEach((el) => {
+              const text = el.textContent?.toLowerCase() || "";
+              if (textToHide.some((hideText) => text.includes(hideText))) {
+                // Only hide if it's a small element (likely a banner/ad)
+                const rect = el.getBoundingClientRect();
+                if (rect.height < 100 || rect.width < 200) {
+                  (el as HTMLElement).style.display = "none";
+                }
+              }
+            });
+          },
         });
 
         // Convert to blob and download
@@ -898,6 +1268,68 @@ export default defineContentScript({
         console.log("Screenshot taken successfully");
       } catch (error) {
         console.error("Error taking screenshot:", error);
+      }
+    }
+
+    // Helper function to update the Clone with Jamiu tab with generated code
+    function updateCloneWithJamiuTab(
+      code: string,
+      framework: string,
+      description: string
+    ) {
+      const codePanel = document.getElementById("dommy-code-panel");
+      if (!codePanel) return;
+
+      const contentBlocks = codePanel.querySelectorAll("[data-tab]");
+      const cloneTab = contentBlocks[0]; // First tab is Clone with Jamiu
+
+      if (cloneTab) {
+        const codeEditor = cloneTab.querySelector("pre code");
+        if (codeEditor) {
+          // Add syntax highlighting
+          const highlightedCode = highlightSyntax(code, framework);
+          codeEditor.innerHTML = highlightedCode;
+
+          // Update the tab title to show it's loaded
+          const tabTitle = cloneTab.querySelector("span");
+          if (tabTitle) {
+            tabTitle.textContent = `Clone with Jamiu 🤖 (${framework})`;
+          }
+        }
+      }
+    }
+
+    // Helper function to update the Clone with Jamiu tab with error
+    function updateCloneWithJamiuTabWithError(error: string) {
+      const codePanel = document.getElementById("dommy-code-panel");
+      if (!codePanel) return;
+
+      const contentBlocks = codePanel.querySelectorAll("[data-tab]");
+      const cloneTab = contentBlocks[0]; // First tab is Clone with Jamiu
+
+      if (cloneTab) {
+        const codeEditor = cloneTab.querySelector("pre code");
+        if (codeEditor) {
+          codeEditor.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center;">
+              <div style="margin-bottom: 16px; color: #ff6b6b; font-size: 24px;">❌</div>
+              <h3 style="margin: 0 0 8px; color: #fff; font-size: 16px;">Generation Failed</h3>
+              <p style="margin: 0; color: #ccc; font-size: 12px; max-width: 200px;">${error}</p>
+              <button onclick="location.reload()" 
+                onmousedown="location.reload()"
+                onmouseup="location.reload()"
+                onmouseover="this.style.background = '#005fa3';"
+                onmouseout="this.style.background = '#007acc';"
+              style="margin-top: 16px; padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>
+            </div>
+          `;
+
+          // Update the tab title
+          const tabTitle = cloneTab.querySelector("span");
+          if (tabTitle) {
+            tabTitle.textContent = "Clone with Jamiu 🤖 (Error)";
+          }
+        }
       }
     }
   },

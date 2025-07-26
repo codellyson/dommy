@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dommy Extension Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 40px 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 60px;
+        color: white;
+      }
+
+      .header h1 {
+        font-size: 3rem;
+        margin-bottom: 16px;
+        text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .header p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+      }
+
+      .demo-section {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 40px;
+        margin-bottom: 40px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      }
+
+      .section-title {
+        font-size: 2rem;
+        color: #2d3748;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      .components-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      .component-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+      }
+
+      .component-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin-right: 12px;
+      }
+
+      .card-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .card-description {
+        color: #718096;
+        line-height: 1.6;
+        margin-bottom: 20px;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-secondary {
+        background: #e2e8f0;
+        color: #4a5568;
+      }
+
+      .btn-secondary:hover {
+        background: #cbd5e0;
+        transform: translateY(-2px);
+      }
+
+      .btn-danger {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        color: white;
+      }
+
+      .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(238, 90, 36, 0.3);
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .alert {
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid;
+      }
+
+      .alert-success {
+        background: #c6f6d5;
+        color: #22543d;
+        border-left-color: #38a169;
+      }
+
+      .alert-warning {
+        background: #fef5e7;
+        color: #744210;
+        border-left-color: #d69e2e;
+      }
+
+      .alert-error {
+        background: #fed7d7;
+        color: #742a2a;
+        border-left-color: #e53e3e;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-right: 8px;
+      }
+
+      .badge-primary {
+        background: #bee3f8;
+        color: #2a4365;
+      }
+
+      .badge-success {
+        background: #c6f6d5;
+        color: #22543d;
+      }
+
+      .badge-warning {
+        background: #fef5e7;
+        color: #744210;
+      }
+
+      .badge-danger {
+        background: #fed7d7;
+        color: #742a2a;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+      }
+
+      .modal-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        max-width: 500px;
+        width: 90%;
+      }
+
+      .modal-header {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      .modal-title {
+        font-size: 1.5rem;
+        color: #2d3748;
+        margin-bottom: 8px;
+      }
+
+      .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #718096;
+      }
+
+      .instructions {
+        background: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 40px;
+      }
+
+      .instructions h3 {
+        color: #2d3748;
+        margin-bottom: 16px;
+        font-size: 1.3rem;
+      }
+
+      .instructions ol {
+        color: #4a5568;
+        line-height: 1.8;
+        padding-left: 20px;
+      }
+
+      .instructions li {
+        margin-bottom: 8px;
+      }
+
+      .highlight {
+        background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🤖 Dommy Extension Demo</h1>
+        <p>Test Jamiu's AI-powered code generation on these UI components</p>
+      </div>
+
+      <div class="demo-section">
+        <div class="instructions">
+          <h3>🎯 How to Test the Extension</h3>
+          <ol>
+            <li>
+              Click the <span class="highlight">Dommy extension icon</span> in
+              your browser toolbar
+            </li>
+            <li>Click on any element below to select it</li>
+            <li>View the generated code in the floating panel</li>
+            <li>
+              Try the <span class="highlight">"Clone with Jamiu 🤖"</span> tab
+              for AI-generated code
+            </li>
+            <li>Use the framework selector to generate different code types</li>
+          </ol>
+        </div>
+
+        <h2 class="section-title">UI Components to Test</h2>
+
+        <div class="components-grid">
+          <!-- Card Component -->
+          <div class="component-card">
+            <div class="card-header">
+              <div
+                class="card-icon"
+                style="
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                  color: white;
+                "
+              >
+                🎨
+              </div>
+              <div class="card-title">Feature Card</div>
+            </div>
+            <div class="card-description">
+              A beautiful card component with gradient background, hover
+              effects, and modern styling.
+            </div>
+            <div class="button-group">
+              <button class="btn btn-primary">Get Started</button>
+              <button class="btn btn-secondary">Learn More</button>
+            </div>
+          </div>
+
+          <!-- Form Component -->
+          <div class="component-card">
+            <div class="card-header">
+              <div
+                class="card-icon"
+                style="
+                  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                  color: white;
+                "
+              >
+                📝
+              </div>
+              <div class="card-title">Contact Form</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input
+                type="email"
+                class="form-input"
+                placeholder="Enter your email"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Message</label>
+              <textarea
+                class="form-input"
+                rows="3"
+                placeholder="Type your message here..."
+              ></textarea>
+            </div>
+            <button class="btn btn-primary">Send Message</button>
+          </div>
+
+          <!-- Alert Component -->
+          <div class="component-card">
+            <div class="card-header">
+              <div
+                class="card-icon"
+                style="
+                  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+                  color: white;
+                "
+              >
+                🔔
+              </div>
+              <div class="card-title">Notification System</div>
+            </div>
+            <div class="alert alert-success">
+              <strong>Success!</strong> Your changes have been saved
+              successfully.
+            </div>
+            <div class="alert alert-warning">
+              <strong>Warning!</strong> Please review your input before
+              proceeding.
+            </div>
+            <div class="alert alert-error">
+              <strong>Error!</strong> Something went wrong. Please try again.
+            </div>
+          </div>
+
+          <!-- Progress Component -->
+          <div class="component-card">
+            <div class="card-header">
+              <div
+                class="card-icon"
+                style="
+                  background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+                  color: white;
+                "
+              >
+                📊
+              </div>
+              <div class="card-title">Progress Tracker</div>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 75%"></div>
+            </div>
+            <p style="text-align: center; color: #718096; margin-bottom: 16px">
+              75% Complete
+            </p>
+            <div style="text-align: center">
+              <span class="badge badge-primary">In Progress</span>
+              <span class="badge badge-success">On Track</span>
+            </div>
+          </div>
+
+          <!-- Modal Trigger -->
+          <div class="component-card">
+            <div class="card-header">
+              <div
+                class="card-icon"
+                style="
+                  background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+                  color: white;
+                "
+              >
+                🪟
+              </div>
+              <div class="card-title">Modal Dialog</div>
+            </div>
+            <div class="card-description">
+              Click the button below to open a modal dialog with overlay and
+              animations.
+            </div>
+            <button class="btn btn-primary" onclick="openModal()">
+              Open Modal
+            </button>
+          </div>
+
+          <!-- Interactive Component -->
+          <div class="component-card">
+            <div class="card-header">
+              <div
+                class="card-icon"
+                style="
+                  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+                  color: white;
+                "
+              >
+                ⚡
+              </div>
+              <div class="card-title">Interactive Widget</div>
+            </div>
+            <div class="card-description">
+              A component with JavaScript interactions and dynamic content
+              updates.
+            </div>
+            <div style="text-align: center; margin-bottom: 16px">
+              <span id="counter">0</span> clicks
+            </div>
+            <button class="btn btn-secondary" onclick="incrementCounter()">
+              Click Me!
+            </button>
+            <button class="btn btn-danger" onclick="resetCounter()">
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="demoModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div class="modal-header">
+          <h3 class="modal-title">🎉 Welcome to Dommy!</h3>
+          <p>
+            This is a modal dialog component. Try selecting it with the
+            extension!
+          </p>
+        </div>
+        <div style="text-align: center">
+          <button class="btn btn-primary" onclick="closeModal()">
+            Close Modal
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let clickCount = 0;
+
+      function incrementCounter() {
+        clickCount++;
+        document.getElementById("counter").textContent = clickCount;
+      }
+
+      function resetCounter() {
+        clickCount = 0;
+        document.getElementById("counter").textContent = clickCount;
+      }
+
+      function openModal() {
+        document.getElementById("demoModal").style.display = "block";
+      }
+
+      function closeModal() {
+        document.getElementById("demoModal").style.display = "none";
+      }
+
+      // Close modal when clicking outside
+      document
+        .getElementById("demoModal")
+        .addEventListener("click", function (e) {
+          if (e.target === this) {
+            closeModal();
+          }
+        });
+
+      // Add some interactive animations
+      document.querySelectorAll(".component-card").forEach((card) => {
+        card.addEventListener("mouseenter", function () {
+          this.style.transform = "translateY(-5px) scale(1.02)";
+        });
+
+        card.addEventListener("mouseleave", function () {
+          this.style.transform = "translateY(0) scale(1)";
+        });
+      });
+    </script>
+  </body>
+</html>

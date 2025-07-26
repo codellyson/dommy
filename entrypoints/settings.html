@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dommy Settings</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .settings-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        width: 100%;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+
+      .title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 8px;
+      }
+
+      .subtitle {
+        color: #718096;
+        font-size: 16px;
+      }
+
+      .form-group {
+        margin-bottom: 24px;
+      }
+
+      .label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #2d3748;
+        font-size: 14px;
+      }
+
+      .input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background: white;
+      }
+
+      .input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .input[type="password"] {
+        font-family: monospace;
+      }
+
+      .help-text {
+        font-size: 12px;
+        color: #718096;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+
+      .button {
+        width: 100%;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 16px;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+      }
+
+      .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .button.secondary {
+        background: #e2e8f0;
+        color: #4a5568;
+      }
+
+      .button.secondary:hover {
+        background: #cbd5e0;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      }
+
+      .status {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        display: none;
+      }
+
+      .status.success {
+        background: #c6f6d5;
+        color: #22543d;
+        border: 1px solid #9ae6b4;
+      }
+
+      .status.error {
+        background: #fed7d7;
+        color: #742a2a;
+        border: 1px solid #feb2b2;
+      }
+
+      .status.info {
+        background: #bee3f8;
+        color: #2a4365;
+        border: 1px solid #90cdf4;
+      }
+
+      .info-card {
+        background: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+
+      .info-card h3 {
+        color: #2d3748;
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+
+      .info-card p {
+        color: #4a5568;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .info-card a {
+        color: #667eea;
+        text-decoration: none;
+      }
+
+      .info-card a:hover {
+        text-decoration: underline;
+      }
+
+      .toggle-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+
+      .toggle-label {
+        font-weight: 600;
+        color: #2d3748;
+        font-size: 14px;
+      }
+
+      .toggle {
+        position: relative;
+        width: 50px;
+        height: 24px;
+        background: #cbd5e0;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .toggle.active {
+        background: #667eea;
+      }
+
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+      }
+
+      .toggle.active::after {
+        transform: translateX(26px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="settings-container">
+      <div class="header">
+        <h1 class="title">Dommy Settings</h1>
+        <p class="subtitle">Configure your AI assistant Jamiu</p>
+      </div>
+
+      <div class="info-card">
+        <h3>🤖 About Jamiu</h3>
+        <p>
+          Jamiu is your AI coding assistant that helps you clone and recreate
+          DOM elements. To use Jamiu's features, you'll need a Cloudflare AI API
+          token.
+        </p>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <form id="settings-form">
+        <div class="form-group">
+          <label for="api-token" class="label">Cloudflare AI API Token</label>
+          <input
+            type="password"
+            id="api-token"
+            class="input"
+            placeholder="Enter your Cloudflare AI API token"
+            autocomplete="off"
+          />
+          <div class="help-text">
+            Get your API token from the
+            <a
+              href="https://dash.cloudflare.com/profile/api-tokens"
+              target="_blank"
+              >Cloudflare Dashboard</a
+            >. Make sure it has AI permissions enabled.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="account-id" class="label">Cloudflare Account ID</label>
+          <input
+            type="text"
+            id="account-id"
+            class="input"
+            placeholder="Enter your Cloudflare Account ID"
+            autocomplete="off"
+          />
+          <div class="help-text">
+            Find your Account ID in the
+            <a href="https://dash.cloudflare.com/" target="_blank"
+              >Cloudflare Dashboard</a
+            >
+            under the right sidebar or in Workers AI settings.
+          </div>
+        </div>
+
+        <div class="toggle-container">
+          <span class="toggle-label">Enable AI Features</span>
+          <div class="toggle" id="ai-toggle"></div>
+        </div>
+
+        <button type="submit" class="button" id="save-button">
+          Save Settings
+        </button>
+
+        <button type="button" class="button secondary" id="test-button">
+          Test Connection
+        </button>
+      </form>
+    </div>
+
+    <script type="module">
+      // Get browser API - try different methods for different environments
+      let browser;
+      if (typeof chrome !== "undefined" && chrome.runtime) {
+        browser = chrome;
+      } else if (typeof browser !== "undefined") {
+        browser = browser;
+      } else if (window.browser) {
+        browser = window.browser;
+      } else {
+        console.error("Browser API not available");
+        // Show error message to user
+        document.addEventListener("DOMContentLoaded", () => {
+          const status = document.getElementById("status");
+          if (status) {
+            status.textContent =
+              "Error: Browser API not available. Please open this page from the extension.";
+            status.className = "status error";
+            status.style.display = "block";
+          }
+        });
+      }
+
+      class SettingsManager {
+        constructor() {
+          this.initializeElements();
+          this.loadSettings();
+          this.bindEvents();
+        }
+
+        initializeElements() {
+          this.apiTokenInput = document.getElementById("api-token");
+          this.accountIdInput = document.getElementById("account-id");
+          this.aiToggle = document.getElementById("ai-toggle");
+          this.saveButton = document.getElementById("save-button");
+          this.testButton = document.getElementById("test-button");
+          this.status = document.getElementById("status");
+          this.form = document.getElementById("settings-form");
+        }
+
+        async loadSettings() {
+          try {
+            if (!browser || !browser.storage) {
+              throw new Error("Browser API not available");
+            }
+
+            const result = await browser.storage.local.get([
+              "cloudflareApiToken",
+              "cloudflareAccountId",
+              "aiFeaturesEnabled",
+            ]);
+
+            if (result.cloudflareApiToken) {
+              this.apiTokenInput.value = result.cloudflareApiToken;
+            }
+
+            if (result.cloudflareAccountId) {
+              this.accountIdInput.value = result.cloudflareAccountId;
+            }
+
+            if (result.aiFeaturesEnabled !== false) {
+              this.aiToggle.classList.add("active");
+            }
+          } catch (error) {
+            console.error("Failed to load settings:", error);
+            this.showStatus(
+              "Failed to load settings: " + error.message,
+              "error"
+            );
+          }
+        }
+
+        bindEvents() {
+          this.form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            this.saveSettings();
+          });
+
+          this.aiToggle.addEventListener("click", () => {
+            this.aiToggle.classList.toggle("active");
+          });
+
+          this.testButton.addEventListener("click", () => {
+            this.testConnection();
+          });
+        }
+
+        async saveSettings() {
+          try {
+            if (!browser || !browser.storage) {
+              throw new Error("Browser API not available");
+            }
+
+            this.saveButton.disabled = true;
+            this.saveButton.textContent = "Saving...";
+
+            const apiToken = this.apiTokenInput.value.trim();
+            const accountId = this.accountIdInput.value.trim();
+            const aiEnabled = this.aiToggle.classList.contains("active");
+
+            await browser.storage.local.set({
+              cloudflareApiToken: apiToken,
+              cloudflareAccountId: accountId,
+              aiFeaturesEnabled: aiEnabled,
+            });
+
+            // Send message to background script to update AI service
+            if (apiToken && accountId && browser.runtime) {
+              await browser.runtime.sendMessage({
+                type: "SET_API_TOKEN",
+                token: apiToken,
+                accountId: accountId,
+              });
+            }
+
+            this.showStatus("Settings saved successfully!", "success");
+          } catch (error) {
+            console.error("Failed to save settings:", error);
+            this.showStatus(
+              "Failed to save settings: " + error.message,
+              "error"
+            );
+          } finally {
+            this.saveButton.disabled = false;
+            this.saveButton.textContent = "Save Settings";
+          }
+        }
+
+        async testConnection() {
+          try {
+            if (!browser || !browser.runtime) {
+              throw new Error("Browser API not available");
+            }
+
+            this.testButton.disabled = true;
+            this.testButton.textContent = "Testing...";
+
+            const apiToken = this.apiTokenInput.value.trim();
+            const accountId = this.accountIdInput.value.trim();
+            if (!apiToken || !accountId) {
+              this.showStatus(
+                "Please enter both API token and Account ID",
+                "error"
+              );
+              return;
+            }
+
+            // Send a test message to background script
+            await browser.runtime.sendMessage({
+              type: "SET_API_TOKEN",
+              token: apiToken,
+              accountId: accountId,
+            });
+
+            this.showStatus("Connection test successful!", "success");
+          } catch (error) {
+            console.error("Connection test failed:", error);
+            this.showStatus(
+              "Connection test failed: " + error.message,
+              "error"
+            );
+          } finally {
+            this.testButton.disabled = false;
+            this.testButton.textContent = "Test Connection";
+          }
+        }
+
+        showStatus(message, type) {
+          this.status.textContent = message;
+          this.status.className = `status ${type}`;
+          this.status.style.display = "block";
+
+          setTimeout(() => {
+            this.status.style.display = "none";
+          }, 5000);
+        }
+      }
+
+      // Initialize settings manager when DOM is loaded
+      document.addEventListener("DOMContentLoaded", () => {
+        if (browser && browser.storage) {
+          new SettingsManager();
+        } else {
+          console.error(
+            "Browser API not available, cannot initialize settings"
+          );
+        }
+      });
+    </script>
+  </body>
+</html>
