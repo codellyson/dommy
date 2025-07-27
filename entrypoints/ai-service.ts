@@ -1,18 +1,7 @@
 // AI Service for Cloudflare AI integration
 export interface ElementAnalysis {
-  tagName: string;
-  className: string;
-  id: string;
-  attributes: Record<string, string>;
-  computedStyles: Record<string, string>;
-  textContent: string;
-  children: ElementAnalysis[];
-  position: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+  code: string;
+  blobURL: string;
 }
 
 export interface CloneRequest {
@@ -32,21 +21,73 @@ export interface CloneResponse {
 class AIService {
   private apiToken: string | null = null;
   private accountId: string | null = null;
+  private model: string | null = null;
   private baseUrl = "https://api.cloudflare.com/client/v4/accounts/";
+  private provider: string | null = null;
 
   constructor() {
     // Load API token from storage
     this.loadApiToken();
   }
+  private createBaseUrl() {
+    let url = "";
+    switch (this.provider) {
+      case "cloudflare":
+        url = this.baseUrl;
+        break;
+      case "openai":
+        url = "https://api.openai.com/v1/chat/completions";
+        break;
+      case "anthropic":
+        url = "https://api.anthropic.com/v1/messages";
+        break;
+      case "google":
+        url = "https://generativelanguage.googleapis.com/v1beta/models/";
+    }
+    return url;
+  }
 
   private async loadApiToken() {
     try {
-      const result = await browser.storage.local.get([
-        "cloudflareApiToken",
-        "cloudflareAccountId",
-      ]);
-      this.apiToken = result.cloudflareApiToken || null;
-      this.accountId = result.cloudflareAccountId || null;
+      const aiProvider = await browser.storage.local.get(["aiProvider"]);
+      this.provider = aiProvider.aiProvider || null;
+      if (aiProvider.aiProvider === "cloudflare") {
+        const result = await browser.storage.local.get([
+          "cloudflareApiToken",
+          "cloudflareAccountId",
+        ]);
+        this.apiToken = result.cloudflareApiToken || null;
+        this.accountId = result.cloudflareAccountId || null;
+      }
+      if (aiProvider.aiProvider === "openai") {
+        const result = await browser.storage.local.get([
+          "openaiApiKey",
+          "openaiAccountId",
+        ]);
+        this.apiToken = result.openaiApiKey || null;
+        this.accountId = result.openaiAccountId || null;
+      }
+      if (aiProvider.aiProvider === "anthropic") {
+        const result = await browser.storage.local.get([
+          "anthropicApiKey",
+          "anthropicAccountId",
+        ]);
+        this.apiToken = result.anthropicApiKey || null;
+        this.accountId = result.anthropicAccountId || null;
+      }
+      if (aiProvider.aiProvider === "google") {
+        const result = await browser.storage.local.get([
+          "googleApiKey",
+          "googleModel",
+        ]);
+        console.log({ result });
+        this.apiToken = result.googleApiKey || null;
+        this.model = result.googleModel || null;
+      }
+
+      if (!this.apiToken) {
+        throw new Error("API token not configured");
+      }
     } catch (error) {
       console.error("Failed to load API credentials:", error);
     }
@@ -61,7 +102,7 @@ class AIService {
     });
   }
 
-  private async makeRequest(model: string, prompt: string): Promise<string> {
+  private async makeRequest(model: string, prompt: string): Promise<any> {
     if (!this.apiToken || !this.accountId) {
       throw new Error("Cloudflare API token and Account ID not configured");
     }
@@ -76,6 +117,7 @@ class AIService {
         },
         body: JSON.stringify({
           prompt: prompt,
+          max_tokens: 10000,
         }),
       }
     );
@@ -88,42 +130,7 @@ class AIService {
 
     const data = await response.json();
     console.log("AI Response:", data);
-
-    // Parse markdown response to extract clean code
-    let cleanResponse = data.result.response;
-
-    // Extract code from markdown code blocks while preserving structure
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-    const matches = [...cleanResponse.matchAll(codeBlockRegex)];
-
-    if (matches.length > 0) {
-      // If we have code blocks, extract and combine them
-      cleanResponse = matches
-        .map((match) => {
-          const language = match[1] || "html";
-          const code = match[2].trim();
-          return `<!-- ${language.toUpperCase()} Code -->\n${code}`;
-        })
-        .join("\n\n");
-    } else {
-      // If no code blocks, just clean up the response
-      cleanResponse = cleanResponse
-        .replace(/```[\w]*\n/g, "")
-        .replace(/```/g, "");
-    }
-
-    // Clean up any remaining markdown formatting
-    cleanResponse = cleanResponse.replace(
-      /^\s*<!--\s*([^>]+)\s*-->\s*$/gm,
-      "<!-- $1 -->"
-    );
-
-    // Trim extra whitespace
-    cleanResponse = cleanResponse.trim();
-
-    console.log("Cleaned response:", cleanResponse.substring(0, 200) + "...");
-
-    return cleanResponse;
+    return data;
   }
 
   async generateCloneCode(request: CloneRequest): Promise<CloneResponse> {
@@ -135,22 +142,15 @@ class AIService {
     const framework = request.targetFramework || "html";
     console.log({ request, element });
 
-    // Validate element has required properties
-    if (
-      !element.tagName ||
-      !element.attributes ||
-      !element.computedStyles ||
-      !element.position
-    ) {
-      throw new Error("Invalid element: missing required properties");
-    }
-
     // Create a detailed prompt for the AI
-    const prompt = this.createPrompt(element, framework, request);
+    const prompt = this.createPrompt(element, framework);
 
     try {
       // Use Cloudflare's @cf/meta/llama-3.1-8b-instruct model
-      const response = await this.makeRequest("@cf/qwen/qwq-32b", prompt);
+      const response = await this.createRequest(
+        "gemini-2.0-flash:generateContent",
+        prompt
+      );
 
       console.log("AI Response received:", {
         responseLength: response?.length || 0,
@@ -164,7 +164,7 @@ class AIService {
       return {
         code: response,
         framework: framework,
-        description: `Generated ${framework} code for ${element?.tagName} element`,
+        description: `Generated ${framework} code for ${element?.code}, using ${element.blobURL} as inspiration`,
         dependencies: this.getDependencies(framework),
       };
     } catch (error) {
@@ -173,44 +173,23 @@ class AIService {
     }
   }
 
-  private createPrompt(
-    element: ElementAnalysis,
-    framework: string,
-    request: CloneRequest
-  ): string {
+  private createPrompt(element: ElementAnalysis, framework: string): string {
     console.log({ element });
-    const elementInfo = `
-Element: ${element?.tagName}${element?.id ? `#${element.id}` : ""}${
-      element?.className ? `.${element.className}` : ""
-    }
-Text: ${element?.textContent?.substring(0, 50) || "None"}
-Size: ${
-      element?.position
-        ? `${element.position.width}x${element.position.height}`
-        : "Unknown"
-    }
-Styles: ${
-      element?.computedStyles
-        ? Object.entries(element.computedStyles)
-            .slice(0, 5)
-            .map(([k, v]) => `${k}:${v}`)
-            .join(", ")
-        : "None"
-    }
-`;
-
+    const elementCode = element.code;
+    const elementImageInspiration = element.blobURL;
     const frameworkInstructions = this.getFrameworkInstructions(framework);
 
     return `You are Jamiu, an expert web developer. Generate ${framework.toUpperCase()} code to clone this element:
 
-${elementInfo}
+${elementCode}
 
 Requirements:
-- Generate ONLY the main component code (HTML structure)
-- Keep CSS minimal and inline if needed
-- Focus on the core structure and functionality
-- Make it responsive and accessible
-- Add brief comments
+- Generate a cloned version of the element, with the same structure and functionality but with a more improved design.
+- Keep CSS minimal and inline if needed.
+- Focus on the core structure and functionality.
+- Make it responsive and accessible.
+- Add brief comments.
+- Use ${elementImageInspiration} as inspiration for the design
 
 ${frameworkInstructions}
 
@@ -250,82 +229,153 @@ HTML: Use semantic elements, tailwind CSS, responsive design`;
     }
   }
 
-  async analyzeElement(element: HTMLElement): Promise<ElementAnalysis> {
-    if (!element || !element.tagName) {
-      throw new Error("Invalid element provided to analyzeElement");
+  private transformAIResponse(result: any, provider: string): string {
+    if (!result) return "";
+
+    switch (provider) {
+      case "cloudflare":
+        // Cloudflare returns { result: { response: string } }
+        if (result.result && result.result.response) {
+          return this.cleanResponse(result.result.response);
+        }
+        return "";
+
+      case "openai":
+        // OpenAI returns { choices: [{ message: { content: string } }] }
+        if (result.choices && result.choices.length > 0) {
+          const content = result.choices[0].message?.content;
+          return content ? this.cleanResponse(content) : "";
+        }
+        return "";
+
+      case "anthropic":
+        // Anthropic returns { content: [{ type: "text", text: string }] }
+        if (result.content && Array.isArray(result.content)) {
+          const textContent = result.content.find(
+            (item: any) => item.type === "text"
+          );
+          return textContent?.text ? this.cleanResponse(textContent.text) : "";
+        }
+        return "";
+
+      case "google":
+        // Google returns array with { content: { parts: [{ text: string }] } }
+        if (Array.isArray(result) && result.length > 0) {
+          const firstResponse = result[0];
+          if (firstResponse.content?.parts?.[0]?.text) {
+            return this.cleanResponse(firstResponse.content.parts[0].text);
+          }
+        }
+        // Fallback for different Google response structures
+        if (result.candidates && result.candidates.length > 0) {
+          const candidate = result.candidates[0];
+          if (candidate.content?.parts?.[0]?.text) {
+            return this.cleanResponse(candidate.content.parts[0].text);
+          }
+        }
+        return "";
+
+      default:
+        return this.cleanResponse(String(result));
     }
+  }
 
-    const computedStyle = window.getComputedStyle(element);
-    const rect = element.getBoundingClientRect();
+  private cleanResponse(response: string): string {
+    if (!response) return "";
 
-    // Get all attributes
-    const attributes: Record<string, string> = {};
-    for (let i = 0; i < element.attributes.length; i++) {
-      const attr = element.attributes[i];
-      attributes[attr.name] = attr.value;
+    // Extract code from markdown code blocks while preserving structure
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    const matches = [...response.matchAll(codeBlockRegex)];
+
+    if (matches.length > 0) {
+      // If we have code blocks, extract and combine them
+      const cleanResponse = matches
+        .map((match) => {
+          const language = match[1] || "html";
+          const code = match[2].trim();
+          return `<!-- ${language.toUpperCase()} Code -->\n${code}`;
+        })
+        .join("\n\n");
+
+      // Clean up any remaining markdown formatting
+      return cleanResponse
+        .replace(/^\s*<!--\s*([^>]+)\s*-->\s*$/gm, "<!-- $1 -->")
+        .trim();
+    } else {
+      // If no code blocks, just clean up the response
+      return response
+        .replace(/```[\w]*\n/g, "")
+        .replace(/```/g, "")
+        .trim();
     }
+  }
+  // make request for different ai providers
+  private async makeCloudflareRequest(
+    model: string,
+    prompt: string
+  ): Promise<string> {
+    const rawResponse = await this.makeRequest(model, prompt);
+    return this.transformAIResponse(rawResponse, "cloudflare");
+  }
 
-    // Get important computed styles
-    const importantStyles = [
-      "display",
-      "position",
-      "width",
-      "height",
-      "margin",
-      "padding",
-      "background",
-      "color",
-      "font-family",
-      "font-size",
-      "font-weight",
-      "border",
-      "border-radius",
-      "box-shadow",
-      "flex",
-      "grid",
-      "transform",
-      "transition",
-      "opacity",
-      "z-index",
-    ];
+  private async makeOpenaiRequest(
+    model: string,
+    prompt: string
+  ): Promise<string> {
+    // TODO: Implement OpenAI request
+    const rawResponse = await this.makeRequest(model, prompt);
+    return this.transformAIResponse(rawResponse, "openai");
+  }
 
-    const computedStyles: Record<string, string> = {};
-    importantStyles.forEach((style) => {
-      const value = computedStyle.getPropertyValue(style);
-      if (value && value !== "normal" && value !== "none" && value !== "0px") {
-        computedStyles[style] = value;
-      }
-    });
+  private async makeAnthropicRequest(
+    model: string,
+    prompt: string
+  ): Promise<string> {
+    // TODO: Implement Anthropic request
+    const rawResponse = await this.makeRequest(model, prompt);
+    return this.transformAIResponse(rawResponse, "anthropic");
+  }
 
-    // Analyze children recursively
-    const children: ElementAnalysis[] = [];
-    for (let i = 0; i < element.children.length; i++) {
-      const child = element.children[i] as HTMLElement;
-      if (
-        child &&
-        child.tagName &&
-        child.tagName !== "SCRIPT" &&
-        child.tagName !== "STYLE"
-      ) {
-        children.push(await this.analyzeElement(child));
-      }
-    }
-
-    return {
-      tagName: element.tagName.toLowerCase(),
-      className: element.className || "",
-      id: element.id || "",
-      attributes: attributes || {},
-      computedStyles: computedStyles || {},
-      textContent: element.textContent?.trim() || "",
-      children: children || [],
-      position: {
-        x: rect.left || 0,
-        y: rect.top || 0,
-        width: rect.width || 0,
-        height: rect.height || 0,
+  private async makeGeminiRequest(
+    model: string,
+    prompt: string
+  ): Promise<string> {
+    const response = await fetch(`${this.createBaseUrl()}${model}`, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": `${this.apiToken}`,
+        "Content-Type": "application/json",
       },
-    };
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const data = await response.json();
+    console.log("GEMINI AI Response:", data);
+    return this.transformAIResponse(data, "google");
+  }
+  // create request for different ai providers
+  private async createRequest(model: string, prompt: string): Promise<string> {
+    switch (this.provider) {
+      case "cloudflare":
+        return await this.makeCloudflareRequest(model, prompt);
+      case "openai":
+        return await this.makeOpenaiRequest(model, prompt);
+      case "anthropic":
+        return await this.makeAnthropicRequest(model, prompt);
+      case "google":
+        return await this.makeGeminiRequest(model, prompt);
+      default:
+        return "";
+    }
   }
 }
 

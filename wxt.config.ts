@@ -6,7 +6,10 @@ export default defineConfig({
   manifest: {
     name: "Dommy",
     description: "DOM Element Screenshot Tool",
-    permissions: ["storage", "activeTab", "scripting"],
+    permissions: ["storage", "activeTab", "scripting", "sidePanel"],
     host_permissions: ["<all_urls>"],
+    side_panel: {
+      default_path: "side-panel.html",
+    },
   },
 });

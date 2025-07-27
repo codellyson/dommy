@@ -15,7 +15,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "@cloudflare/ai": "^1.2.2",
+    "@stackblitz/sdk": "^1.11.0",
     "html2canvas": "^1.4.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

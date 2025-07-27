@@ -1,0 +1,428 @@
+import React, { useState, useEffect } from "react";
+import StackBlitzSDK from "@stackblitz/sdk";
+// WXT provides browser API globally
+declare const browser: any;
+
+interface Message extends Record<string, any> {
+  type:
+    | "CLONE_CODE_GENERATED"
+    | "CLONE_CODE_ERROR"
+    | "ELEMENT_CLICKED"
+    | "SIDEBAR_OPENED";
+  error: string | null;
+  elementCode: {
+    html: string;
+    css: string;
+    js: string;
+    blobURL: string | null;
+  };
+  elementInfo: string;
+}
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState(0);
+  const [htmlCode, setHtmlCode] = useState("");
+  const [aiCode, setAiCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedFramework, setSelectedFramework] = useState("html");
+  const [message, setMessage] = useState<Message | null>(null);
+  console.log({ message });
+  useEffect(() => {
+    // Listen for messages from content script
+    browser.runtime.onMessage.addListener((_message: Message) => {
+      setMessage(_message);
+      if (_message.type === "ELEMENT_CLICKED") {
+        setHtmlCode(_message.elementCode?.html || "");
+        setAiCode("");
+        setError(null);
+        setIsLoading(false);
+
+        // // Auto-generate AI code if element is selected
+        // if (message.elementInfo) {
+        //   generateAiCode(message.elementInfo, selectedFramework);
+        // }
+      } else if (_message.type === "CLONE_CODE_GENERATED") {
+        setMessage({
+          ...message,
+          ..._message,
+        });
+        console.log({ message }, "clone    code generated");
+        setAiCode(_message.code);
+        setIsLoading(false);
+        setError(null);
+      } else if (_message.type === "CLONE_CODE_ERROR") {
+        setError("Failed to generate clone code. Please try again.");
+        setIsLoading(false);
+      }
+    });
+    //
+
+    // Notify content script that sidebar is open
+    const notifySidebarOpened = async () => {
+      try {
+        const tabs = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (tabs[0]?.id) {
+          await browser.tabs.sendMessage(tabs[0].id, {
+            type: "SIDEBAR_OPENED",
+          });
+          console.log("Sidebar opened notification sent to content script");
+        }
+      } catch (error) {
+        console.error(
+          "Failed to notify content script that sidebar opened:",
+          error
+        );
+      }
+    };
+
+    // Send notification after a short delay
+    const timeoutId = setTimeout(notifySidebarOpened, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [selectedFramework, message]);
+
+  const generateAiCode = async <
+    INPUT extends {
+      html: string;
+      css: string;
+      js: string;
+      blobURL: string | null;
+    }
+  >(
+    elementInfo: INPUT,
+    framework: string
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    if (!elementInfo) return;
+
+    try {
+      // Check if AI features are enabled
+      const result = await browser.storage.local.get(["aiFeaturesEnabled"]);
+      if (result.aiFeaturesEnabled === false) {
+        setError(
+          "AI features are disabled. Enable them in settings to use Jamiu."
+        );
+        setIsLoading(false);
+        return;
+      }
+      const tabs = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      // Send request to background script for AI generation
+      await browser.runtime.sendMessage({
+        type: "GENERATE_CLONE_CODE",
+        tabId: tabs[0]?.id,
+        elementCode: elementInfo,
+        targetFramework: framework,
+      });
+    } catch (error) {
+      console.error("Failed to send AI generation request:", error);
+      setError("Could not send AI generation request");
+      setIsLoading(false);
+    }
+  };
+
+  console.log({ htmlCode });
+  const handleFrameworkChange = (framework: string) => {
+    setSelectedFramework(framework);
+    if (message?.elementCode) {
+      generateAiCode(message.elementCode, framework);
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // You could add a toast notification here
+    } catch (error) {
+      console.error("Failed to copy to clipboard:", error);
+    }
+  };
+
+  const openInStackBlitz = (code: string, framework: string) => {
+    type SBConfig = {
+      title: string;
+      description: string;
+      template:
+        | "html"
+        | "create-react-app"
+        | "vue"
+        | "angular-cli"
+        | "javascript"
+        | "node"
+        | "polymer"
+        | "typescript";
+      files: Record<string, string>;
+    };
+    const sb = StackBlitzSDK;
+    const stackBlitzConfig: SBConfig = {
+      title: `Dommy - ${framework.toUpperCase()} Component`,
+      description: `Generated by Dommy AI Assistant`,
+      template:
+        framework === "react"
+          ? "create-react-app"
+          : framework === "vue"
+          ? "vue"
+          : framework === "svelte"
+          ? "javascript"
+          : "html",
+      files: {},
+    };
+
+    // Prepare files based on framework
+    if (framework === "react") {
+      stackBlitzConfig.files = {
+        "src/App.js": code,
+        "src/index.js": `import React from 'react';
+import ReactDOM from 'react-dom';
+import App from './App';
+
+ReactDOM.render(<App />, document.getElementById('root'));`,
+        "public/index.html": `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dommy React Component</title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>`,
+      };
+    } else if (framework === "vue") {
+      stackBlitzConfig.files = {
+        "src/App.vue": code,
+        "src/main.js": `import { createApp } from 'vue'
+import App from './App.vue'
+
+createApp(App).mount('#app')`,
+        "index.html": `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dommy Vue Component</title>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>`,
+      };
+    } else if (framework === "svelte") {
+      stackBlitzConfig.files = {
+        "src/App.svelte": code,
+        "src/main.js": `import App from './App.svelte'
+
+const app = new App({
+  target: document.body,
+})
+
+export default app`,
+        "index.html": `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dommy Svelte Component</title>
+  </head>
+  <body>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>`,
+      };
+    } else {
+      // Vanilla HTML/CSS/JS
+      stackBlitzConfig.files = {
+        "index.html": code,
+        "package.json": `{
+  "name": "dommy-vanilla-component",
+  "version": "1.0.0",
+  "description": "Generated by Dommy AI Assistant"
+}`,
+      };
+    }
+
+    // Create StackBlitz URL
+    sb.openProject(stackBlitzConfig);
+  };
+
+  const renderTabContent = () => {
+    if (activeTab === 0) {
+      return (
+        <div className="tab-content">
+          <pre className="code-editor">
+            {htmlCode || "No HTML code available"}
+          </pre>
+          <button
+            className="copy-button"
+            onClick={() => copyToClipboard(htmlCode)}
+          >
+            📋 Copy HTML
+          </button>
+        </div>
+      );
+    } else {
+      return (
+        <div className="tab-content">
+          <select
+            className="framework-selector"
+            value={selectedFramework}
+            onChange={(e) => handleFrameworkChange(e.target.value)}
+          >
+            <option value="html">HTML/CSS/JS</option>
+            <option value="react">React</option>
+            <option value="vue">Vue</option>
+            <option value="svelte">Svelte</option>
+          </select>
+
+          {isLoading && (
+            <div className="loading">
+              <div className="spinner"></div>
+              <h3>🤖 Jamiu is working...</h3>
+              <p>
+                Analyzing element and generating{" "}
+                {selectedFramework.toUpperCase()} code
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="error">
+              <h3>❌ Generation Failed</h3>
+              <p>{error}</p>
+              <button
+                className="copy-button"
+                onClick={() =>
+                  message?.elementCode &&
+                  generateAiCode(message.elementCode, selectedFramework)
+                }
+              >
+                🔄 Retry
+              </button>
+            </div>
+          )}
+
+          {aiCode && !isLoading && !error && (
+            <>
+              <pre className="code-editor">{aiCode}</pre>
+              <div className="button-group">
+                <button
+                  className="copy-button"
+                  onClick={() => copyToClipboard(aiCode)}
+                >
+                  📋 Copy {selectedFramework.toUpperCase()} Code
+                </button>
+                <button
+                  className="stackblitz-button"
+                  onClick={() => openInStackBlitz(aiCode, selectedFramework)}
+                >
+                  🚀 Edit with StackBlitz
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+  };
+  if (error) {
+    return (
+      <div className="sidebar">
+        <div className="header">
+          <h1>🤖 Dommy Sidebar</h1>
+          <p>AI-Powered Element Cloning</p>
+        </div>
+        <div className="content">
+          <div className="error">
+            <h3>❌ Generation Failed</h3>
+            <p>{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (!message?.elementCode) {
+    return (
+      <div className="sidebar">
+        <div className="header">
+          <h1>🤖 Dommy Sidebar</h1>
+          <p>AI-Powered Element Cloning</p>
+        </div>
+        <div className="content">
+          <div className="no-element">
+            <h3>No Element Selected</h3>
+            <p>
+              Click on any element on the page to start cloning with Jamiu's AI
+              assistance. The sidebar will show the element's code and generate
+              AI-powered clones.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sidebar">
+      <div className="header">
+        <h1>🤖 Dommy Sidebar</h1>
+        <a
+          href="/settings.html"
+          target="_blank"
+          className="settings-link"
+          style={{ float: "right", textDecoration: "none" }}
+        >
+          ⚙️ Settings
+        </a>
+        <p>AI-Powered Element Cloning</p>
+      </div>
+
+      <div className="content">
+        <div className="element-info">
+          <h3>Selected Element</h3>
+          <div className="element-details">
+            {message?.elementCode?.blobURL && (
+              <img
+                src={message?.elementCode?.blobURL}
+                alt="Selected Element"
+                width={"100%"}
+                height={"100px"}
+                style={{ objectFit: "contain" }}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="code-tabs">
+          <div className="tab-header">
+            <button
+              className={`tab ${activeTab === 0 ? "active" : ""}`}
+              onClick={() => setActiveTab(0)}
+            >
+              HTML
+            </button>
+            <button
+              className={`tab ${activeTab === 1 ? "active" : ""}`}
+              onClick={() => setActiveTab(1)}
+            >
+              Clone with Jamiu 🤖
+            </button>
+          </div>
+          {renderTabContent()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;

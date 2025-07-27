@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 // WXT provides browser API globally
-declare const browser: any;
+// declare const browser: any;
 
 function App() {
   const [isElementSelected, setIsElementSelected] = useState(false);
@@ -109,7 +109,7 @@ function App() {
             className="settings-link"
             onClick={() =>
               browser.tabs.create({
-                url: browser.runtime.getURL("settings.html"),
+                url: browser.runtime.getURL("/settings.html"),
               })
             }
             title="Open Settings"

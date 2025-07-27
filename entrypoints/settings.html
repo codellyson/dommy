@@ -28,7 +28,7 @@
         border-radius: 20px;
         padding: 40px;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        max-width: 500px;
+        max-width: 600px;
         width: 100%;
       }
 
@@ -220,6 +220,56 @@
       .toggle.active::after {
         transform: translateX(26px);
       }
+
+      .provider-select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .provider-select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .provider-fields {
+        display: none;
+        animation: fadeIn 0.3s ease;
+      }
+
+      .provider-fields.active {
+        display: block;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .provider-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+
+      .provider-option {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+      }
     </style>
   </head>
   <body>
@@ -233,8 +283,8 @@
         <h3>🤖 About Jamiu</h3>
         <p>
           Jamiu is your AI coding assistant that helps you clone and recreate
-          DOM elements. To use Jamiu's features, you'll need a Cloudflare AI API
-          token.
+          DOM elements. Choose your preferred AI provider and enter your API
+          credentials.
         </p>
       </div>
 
@@ -242,39 +292,188 @@
 
       <form id="settings-form">
         <div class="form-group">
-          <label for="api-token" class="label">Cloudflare AI API Token</label>
-          <input
-            type="password"
-            id="api-token"
-            class="input"
-            placeholder="Enter your Cloudflare AI API token"
-            autocomplete="off"
-          />
-          <div class="help-text">
-            Get your API token from the
-            <a
-              href="https://dash.cloudflare.com/profile/api-tokens"
-              target="_blank"
-              >Cloudflare Dashboard</a
-            >. Make sure it has AI permissions enabled.
+          <label for="provider-select" class="label">AI Provider</label>
+          <select id="provider-select" class="provider-select">
+            <option value="">Select an AI provider</option>
+            <option value="cloudflare">🌩️ Cloudflare AI</option>
+            <option value="openai">🤖 OpenAI</option>
+            <option value="anthropic">🧠 Anthropic (Claude)</option>
+            <option value="google">🔍 Google (Gemini)</option>
+            <option value="huggingface">🤗 Hugging Face</option>
+          </select>
+        </div>
+
+        <!-- Cloudflare Fields -->
+        <div id="cloudflare-fields" class="provider-fields">
+          <div class="form-group">
+            <label for="cloudflare-api-token" class="label"
+              >Cloudflare AI API Token</label
+            >
+            <input
+              type="password"
+              id="cloudflare-api-token"
+              class="input"
+              placeholder="Enter your Cloudflare AI API token"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Get your API token from the
+              <a
+                href="https://dash.cloudflare.com/profile/api-tokens"
+                target="_blank"
+                >Cloudflare Dashboard</a
+              >. Make sure it has AI permissions enabled.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cloudflare-account-id" class="label"
+              >Cloudflare Account ID</label
+            >
+            <input
+              type="text"
+              id="cloudflare-account-id"
+              class="input"
+              placeholder="Enter your Cloudflare Account ID"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Find your Account ID in the
+              <a href="https://dash.cloudflare.com/" target="_blank"
+                >Cloudflare Dashboard</a
+              >
+              under the right sidebar or in Workers AI settings.
+            </div>
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="account-id" class="label">Cloudflare Account ID</label>
-          <input
-            type="text"
-            id="account-id"
-            class="input"
-            placeholder="Enter your Cloudflare Account ID"
-            autocomplete="off"
-          />
-          <div class="help-text">
-            Find your Account ID in the
-            <a href="https://dash.cloudflare.com/" target="_blank"
-              >Cloudflare Dashboard</a
+        <!-- OpenAI Fields -->
+        <div id="openai-fields" class="provider-fields">
+          <div class="form-group">
+            <label for="openai-api-key" class="label">OpenAI API Key</label>
+            <input
+              type="password"
+              id="openai-api-key"
+              class="input"
+              placeholder="Enter your OpenAI API key"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Get your API key from the
+              <a href="https://platform.openai.com/api-keys" target="_blank"
+                >OpenAI Platform</a
+              >.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="openai-model" class="label">Model</label>
+            <select id="openai-model" class="input">
+              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Anthropic Fields -->
+        <div id="anthropic-fields" class="provider-fields">
+          <div class="form-group">
+            <label for="anthropic-api-key" class="label"
+              >Anthropic API Key</label
             >
-            under the right sidebar or in Workers AI settings.
+            <input
+              type="password"
+              id="anthropic-api-key"
+              class="input"
+              placeholder="Enter your Anthropic API key"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Get your API key from the
+              <a href="https://console.anthropic.com/" target="_blank"
+                >Anthropic Console</a
+              >.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="anthropic-model" class="label">Model</label>
+            <select id="anthropic-model" class="input">
+              <option value="claude-3-5-sonnet-20241022">
+                Claude 3.5 Sonnet
+              </option>
+              <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+              <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+              <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Google Fields -->
+        <div id="google-fields" class="provider-fields">
+          <div class="form-group">
+            <label for="google-api-key" class="label">Google AI API Key</label>
+            <input
+              type="password"
+              id="google-api-key"
+              class="input"
+              placeholder="Enter your Google AI API key"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Get your API key from the
+              <a href="https://makersuite.google.com/app/apikey" target="_blank"
+                >Google AI Studio</a
+              >.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="google-model" class="label">Model</label>
+            <select id="google-model" class="input">
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              <option value="gemini-pro">Gemini Pro</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Hugging Face Fields -->
+        <div id="huggingface-fields" class="provider-fields">
+          <div class="form-group">
+            <label for="huggingface-api-key" class="label"
+              >Hugging Face API Token</label
+            >
+            <input
+              type="password"
+              id="huggingface-api-key"
+              class="input"
+              placeholder="Enter your Hugging Face API token"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Get your API token from your
+              <a href="https://huggingface.co/settings/tokens" target="_blank"
+                >Hugging Face settings</a
+              >.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="huggingface-model" class="label">Model</label>
+            <input
+              type="text"
+              id="huggingface-model"
+              class="input"
+              placeholder="e.g., meta-llama/Llama-2-70b-chat-hf"
+              autocomplete="off"
+            />
+            <div class="help-text">
+              Enter the model name from Hugging Face Hub (e.g.,
+              meta-llama/Llama-2-70b-chat-hf)
+            </div>
           </div>
         </div>
 
@@ -324,13 +523,21 @@
         }
 
         initializeElements() {
-          this.apiTokenInput = document.getElementById("api-token");
-          this.accountIdInput = document.getElementById("account-id");
+          this.providerSelect = document.getElementById("provider-select");
           this.aiToggle = document.getElementById("ai-toggle");
           this.saveButton = document.getElementById("save-button");
           this.testButton = document.getElementById("test-button");
           this.status = document.getElementById("status");
           this.form = document.getElementById("settings-form");
+
+          // Provider field containers
+          this.providerFields = {
+            cloudflare: document.getElementById("cloudflare-fields"),
+            openai: document.getElementById("openai-fields"),
+            anthropic: document.getElementById("anthropic-fields"),
+            google: document.getElementById("google-fields"),
+            huggingface: document.getElementById("huggingface-fields"),
+          };
         }
 
         async loadSettings() {
@@ -340,17 +547,66 @@
             }
 
             const result = await browser.storage.local.get([
+              "aiProvider",
               "cloudflareApiToken",
               "cloudflareAccountId",
+              "openaiApiKey",
+              "openaiModel",
+              "anthropicApiKey",
+              "anthropicModel",
+              "googleApiKey",
+              "googleModel",
+              "huggingfaceApiKey",
+              "huggingfaceModel",
               "aiFeaturesEnabled",
             ]);
 
-            if (result.cloudflareApiToken) {
-              this.apiTokenInput.value = result.cloudflareApiToken;
+            // Set provider
+            if (result.aiProvider) {
+              this.providerSelect.value = result.aiProvider;
+              this.showProviderFields(result.aiProvider);
             }
 
+            // Load provider-specific settings
+            if (result.cloudflareApiToken) {
+              document.getElementById("cloudflare-api-token").value =
+                result.cloudflareApiToken;
+            }
             if (result.cloudflareAccountId) {
-              this.accountIdInput.value = result.cloudflareAccountId;
+              document.getElementById("cloudflare-account-id").value =
+                result.cloudflareAccountId;
+            }
+            if (result.openaiApiKey) {
+              document.getElementById("openai-api-key").value =
+                result.openaiApiKey;
+            }
+            if (result.openaiModel) {
+              document.getElementById("openai-model").value =
+                result.openaiModel;
+            }
+            if (result.anthropicApiKey) {
+              document.getElementById("anthropic-api-key").value =
+                result.anthropicApiKey;
+            }
+            if (result.anthropicModel) {
+              document.getElementById("anthropic-model").value =
+                result.anthropicModel;
+            }
+            if (result.googleApiKey) {
+              document.getElementById("google-api-key").value =
+                result.googleApiKey;
+            }
+            if (result.googleModel) {
+              document.getElementById("google-model").value =
+                result.googleModel;
+            }
+            if (result.huggingfaceApiKey) {
+              document.getElementById("huggingface-api-key").value =
+                result.huggingfaceApiKey;
+            }
+            if (result.huggingfaceModel) {
+              document.getElementById("huggingface-model").value =
+                result.huggingfaceModel;
             }
 
             if (result.aiFeaturesEnabled !== false) {
@@ -371,6 +627,10 @@
             this.saveSettings();
           });
 
+          this.providerSelect.addEventListener("change", (e) => {
+            this.showProviderFields(e.target.value);
+          });
+
           this.aiToggle.addEventListener("click", () => {
             this.aiToggle.classList.toggle("active");
           });
@@ -378,6 +638,20 @@
           this.testButton.addEventListener("click", () => {
             this.testConnection();
           });
+        }
+
+        showProviderFields(provider) {
+          // Hide all provider fields
+          Object.values(this.providerFields).forEach((field) => {
+            if (field) {
+              field.classList.remove("active");
+            }
+          });
+
+          // Show selected provider fields
+          if (provider && this.providerFields[provider]) {
+            this.providerFields[provider].classList.add("active");
+          }
         }
 
         async saveSettings() {
@@ -389,22 +663,58 @@
             this.saveButton.disabled = true;
             this.saveButton.textContent = "Saving...";
 
-            const apiToken = this.apiTokenInput.value.trim();
-            const accountId = this.accountIdInput.value.trim();
+            const provider = this.providerSelect.value;
             const aiEnabled = this.aiToggle.classList.contains("active");
 
-            await browser.storage.local.set({
-              cloudflareApiToken: apiToken,
-              cloudflareAccountId: accountId,
+            // Collect all provider-specific data
+            const settings = {
+              aiProvider: provider,
               aiFeaturesEnabled: aiEnabled,
-            });
+            };
+
+            // Add provider-specific settings
+            if (provider === "cloudflare") {
+              settings.cloudflareApiToken = document
+                .getElementById("cloudflare-api-token")
+                .value.trim();
+              settings.cloudflareAccountId = document
+                .getElementById("cloudflare-account-id")
+                .value.trim();
+            } else if (provider === "openai") {
+              settings.openaiApiKey = document
+                .getElementById("openai-api-key")
+                .value.trim();
+              settings.openaiModel =
+                document.getElementById("openai-model").value;
+            } else if (provider === "anthropic") {
+              settings.anthropicApiKey = document
+                .getElementById("anthropic-api-key")
+                .value.trim();
+              settings.anthropicModel =
+                document.getElementById("anthropic-model").value;
+            } else if (provider === "google") {
+              settings.googleApiKey = document
+                .getElementById("google-api-key")
+                .value.trim();
+              settings.googleModel =
+                document.getElementById("google-model").value;
+            } else if (provider === "huggingface") {
+              settings.huggingfaceApiKey = document
+                .getElementById("huggingface-api-key")
+                .value.trim();
+              settings.huggingfaceModel = document
+                .getElementById("huggingface-model")
+                .value.trim();
+            }
+
+            await browser.storage.local.set(settings);
 
             // Send message to background script to update AI service
-            if (apiToken && accountId && browser.runtime) {
+            if (provider && browser.runtime) {
               await browser.runtime.sendMessage({
-                type: "SET_API_TOKEN",
-                token: apiToken,
-                accountId: accountId,
+                type: "SET_AI_PROVIDER",
+                provider: provider,
+                settings: settings,
               });
             }
 
@@ -430,21 +740,75 @@
             this.testButton.disabled = true;
             this.testButton.textContent = "Testing...";
 
-            const apiToken = this.apiTokenInput.value.trim();
-            const accountId = this.accountIdInput.value.trim();
-            if (!apiToken || !accountId) {
-              this.showStatus(
-                "Please enter both API token and Account ID",
-                "error"
-              );
+            const provider = this.providerSelect.value;
+            if (!provider) {
+              this.showStatus("Please select an AI provider", "error");
+              return;
+            }
+
+            // Validate provider-specific fields
+            let isValid = true;
+            let errorMessage = "";
+
+            if (provider === "cloudflare") {
+              const token = document
+                .getElementById("cloudflare-api-token")
+                .value.trim();
+              const accountId = document
+                .getElementById("cloudflare-account-id")
+                .value.trim();
+              if (!token || !accountId) {
+                isValid = false;
+                errorMessage =
+                  "Please enter both API token and Account ID for Cloudflare";
+              }
+            } else if (provider === "openai") {
+              const apiKey = document
+                .getElementById("openai-api-key")
+                .value.trim();
+              if (!apiKey) {
+                isValid = false;
+                errorMessage = "Please enter your OpenAI API key";
+              }
+            } else if (provider === "anthropic") {
+              const apiKey = document
+                .getElementById("anthropic-api-key")
+                .value.trim();
+              if (!apiKey) {
+                isValid = false;
+                errorMessage = "Please enter your Anthropic API key";
+              }
+            } else if (provider === "google") {
+              const apiKey = document
+                .getElementById("google-api-key")
+                .value.trim();
+              if (!apiKey) {
+                isValid = false;
+                errorMessage = "Please enter your Google AI API key";
+              }
+            } else if (provider === "huggingface") {
+              const apiKey = document
+                .getElementById("huggingface-api-key")
+                .value.trim();
+              const model = document
+                .getElementById("huggingface-model")
+                .value.trim();
+              if (!apiKey || !model) {
+                isValid = false;
+                errorMessage =
+                  "Please enter both API token and model name for Hugging Face";
+              }
+            }
+
+            if (!isValid) {
+              this.showStatus(errorMessage, "error");
               return;
             }
 
             // Send a test message to background script
             await browser.runtime.sendMessage({
-              type: "SET_API_TOKEN",
-              token: apiToken,
-              accountId: accountId,
+              type: "TEST_AI_CONNECTION",
+              provider: provider,
             });
 
             this.showStatus("Connection test successful!", "success");

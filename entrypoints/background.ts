@@ -31,13 +31,16 @@ export default defineBackground(() => {
     } else if (message.type === "GENERATE_CLONE_CODE") {
       // Handle AI code generation requests
       try {
-        const { elementAnalysis, targetFramework } = message;
+        const { elementCode, targetFramework, tabId } = message;
 
         // Import the AI service dynamically
         const { default: aiService } = await import("./ai-service.ts");
 
         const response = await aiService.generateCloneCode({
-          element: elementAnalysis,
+          element: {
+            code: elementCode.html,
+            blobURL: elementCode.blobURL,
+          },
           targetFramework: targetFramework || "html",
           includeStyles: true,
           includeInteractions: true,
@@ -50,7 +53,8 @@ export default defineBackground(() => {
         });
 
         // Send the generated code back to the content script
-        if (sender.tab?.id) {
+        console.log("sender tab id", sender.tab?.id, tabId);
+        if (tabId) {
           const message = {
             type: "CLONE_CODE_GENERATED",
             code: response.code,
@@ -64,14 +68,16 @@ export default defineBackground(() => {
             codeLength: message.code?.length || 0,
           });
 
-          await browser.tabs.sendMessage(sender.tab.id, message);
+          await browser.tabs.sendMessage(tabId, message);
         }
       } catch (error) {
         console.error("Failed to generate clone code:", error);
+        const { tabId } = message;
 
         // Send error back to content script
-        if (sender.tab?.id) {
-          await browser.tabs.sendMessage(sender.tab.id, {
+        if (tabId) {
+          console.log("Sent Ai error response to Content Script");
+          await browser.tabs.sendMessage(tabId, {
             type: "CLONE_CODE_ERROR",
             error: error instanceof Error ? error.message : String(error),
           });
@@ -98,6 +104,12 @@ export default defineBackground(() => {
             error: error instanceof Error ? error.message : String(error),
           });
         }
+      }
+    } else if (message.type === "OPEN_SIDE_PANEL") {
+      if (sender.tab?.id) {
+        await browser.sidePanel.open({
+          tabId: sender?.tab.id!,
+        });
       }
     }
   });
