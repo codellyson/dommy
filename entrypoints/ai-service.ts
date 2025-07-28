@@ -1,4 +1,3 @@
-// AI Service for Cloudflare AI integration
 export interface ElementAnalysis {
   code: string;
   blobURL: string;
@@ -26,7 +25,6 @@ class AIService {
   private provider: string | null = null;
 
   constructor() {
-    // Load API token from storage
     this.loadApiToken();
   }
   private createBaseUrl() {
@@ -49,57 +47,97 @@ class AIService {
 
   private async loadApiToken() {
     try {
-      const aiProvider = await browser.storage.local.get(["aiProvider"]);
-      this.provider = aiProvider.aiProvider || null;
-      if (aiProvider.aiProvider === "cloudflare") {
-        const result = await browser.storage.local.get([
-          "cloudflareApiToken",
-          "cloudflareAccountId",
-        ]);
-        this.apiToken = result.cloudflareApiToken || null;
-        this.accountId = result.cloudflareAccountId || null;
-      }
-      if (aiProvider.aiProvider === "openai") {
-        const result = await browser.storage.local.get([
-          "openaiApiKey",
-          "openaiAccountId",
-        ]);
-        this.apiToken = result.openaiApiKey || null;
-        this.accountId = result.openaiAccountId || null;
-      }
-      if (aiProvider.aiProvider === "anthropic") {
-        const result = await browser.storage.local.get([
-          "anthropicApiKey",
-          "anthropicAccountId",
-        ]);
-        this.apiToken = result.anthropicApiKey || null;
-        this.accountId = result.anthropicAccountId || null;
-      }
-      if (aiProvider.aiProvider === "google") {
-        const result = await browser.storage.local.get([
-          "googleApiKey",
-          "googleModel",
-        ]);
-        console.log({ result });
-        this.apiToken = result.googleApiKey || null;
-        this.model = result.googleModel || null;
+      const retrieve = async (keys: string[]) =>
+        await browser.storage.local.get(keys);
+
+      const { aiProvider, aiToken, aiAccountId, aiModel } = await retrieve([
+        "aiProvider",
+        "aiToken",
+        "aiAccountId",
+        "aiModel",
+      ]);
+
+      if (!aiProvider && !aiToken && !aiAccountId && !aiModel) {
+        console.log("No AI configuration found in storage");
+        return;
       }
 
+      this.provider = aiProvider || null;
+      this.apiToken = aiToken || null;
+      this.accountId = aiAccountId || null;
+      this.model = aiModel || null;
+      console.log("Loaded configuration:", {
+        provider: this.provider,
+        apiToken: this.apiToken ? "***" : null,
+        accountId: this.accountId,
+        model: this.model,
+      });
+
       if (!this.apiToken) {
-        throw new Error("API token not configured");
+        console.warn("API token not configured");
       }
     } catch (error) {
       console.error("Failed to load API credentials:", error);
     }
   }
 
-  async setApiToken(token: string, accountId: string) {
-    this.apiToken = token;
-    this.accountId = accountId;
-    await browser.storage.local.set({
-      cloudflareApiToken: token,
-      cloudflareAccountId: accountId,
-    });
+  async setAiProvider(provider: {
+    aiFeaturesEnabled: boolean;
+    aiProvider: string;
+    aiToken: string;
+    aiAccountId?: string;
+    aiModel?: string;
+  }) {
+    /**
+     * This can be the following:
+     *  {
+     *    aiFeaturesEnabled: true,
+     *    aiProvider: "google",
+     *    googleApiKey: "",
+     *    googleModel: "gemini-1.5-pro",
+     *  }
+     *
+     *  {
+     *    aiFeaturesEnabled: true,
+     *    aiProvider: "openai",
+     *    openaiApiKey: "",
+     *    openaiModel: "gpt-4o-mini",
+     *  }
+     *
+     *  {
+     *    aiFeaturesEnabled: true,
+     *    aiProvider: "anthropic",
+     *    anthropicApiKey: "",
+     *    anthropicModel: "claude-3-5-sonnet-20240620",
+     *  }
+     *
+     *  {
+     *    aiFeaturesEnabled: true,
+     *    aiProvider: "cloudflare",
+     *    cloudflareApiKey: "",
+     *    cloudflareModel: "claude-3-5-sonnet-20240620",
+     *  }
+     *  {
+     *    aiFeaturesEnabled: false,
+     *    aiProvider:'huggingface',
+     *    huggingfaceApiKey: "",
+     *    huggingfaceModel: "google/gemini-2.0-flash-001",
+     * }
+     *
+     */
+    this.provider = provider.aiProvider;
+    this.apiToken = provider.aiToken;
+    this.accountId = provider.aiAccountId || null;
+    this.model = provider.aiModel || null;
+
+    const storageData = {
+      aiProvider: provider.aiProvider,
+      aiToken: provider.aiToken,
+      aiAccountId: provider.aiAccountId || null,
+      aiModel: provider.aiModel || null,
+    };
+
+    await browser.storage.local.set(storageData);
   }
 
   private async makeRequest(model: string, prompt: string): Promise<any> {
@@ -331,7 +369,6 @@ HTML: Use semantic elements, tailwind CSS, responsive design`;
     model: string,
     prompt: string
   ): Promise<string> {
-    // TODO: Implement Anthropic request
     const rawResponse = await this.makeRequest(model, prompt);
     return this.transformAIResponse(rawResponse, "anthropic");
   }
@@ -362,7 +399,6 @@ HTML: Use semantic elements, tailwind CSS, responsive design`;
     console.log("GEMINI AI Response:", data);
     return this.transformAIResponse(data, "google");
   }
-  // create request for different ai providers
   private async createRequest(model: string, prompt: string): Promise<string> {
     switch (this.provider) {
       case "cloudflare":

@@ -1,16 +1,11 @@
 export default defineBackground(() => {
-  console.log("Dommy extension background script loaded");
-
-  // Handle extension icon click
   browser.action.onClicked.addListener(async (tab) => {
     if (tab.id) {
-      // Toggle hover mode when icon is clicked
       const result = await browser.storage.local.get(["isElementSelected"]);
       const newState = !result.isElementSelected;
 
       await browser.storage.local.set({ isElementSelected: newState });
 
-      // Send message to content script
       await browser.tabs.sendMessage(tab.id, {
         type: "TOGGLE_ELEMENT_SELECTION",
         isElementSelected: newState,
@@ -18,22 +13,16 @@ export default defineBackground(() => {
     }
   });
 
-  // Handle messages from content scripts
   browser.runtime.onMessage.addListener(async (message, sender) => {
     if (
       message.type === "ELEMENT_CLICKED" ||
       message.type === "ELEMENT_UNCLICKED"
     ) {
-      // Forward messages to popup if it's open
-      browser.runtime.sendMessage(message).catch(() => {
-        // Popup might not be open, ignore error
-      });
+      browser.runtime.sendMessage(message).catch(() => {});
     } else if (message.type === "GENERATE_CLONE_CODE") {
-      // Handle AI code generation requests
       try {
         const { elementCode, targetFramework, tabId } = message;
 
-        // Import the AI service dynamically
         const { default: aiService } = await import("./ai-service.ts");
 
         const response = await aiService.generateCloneCode({
@@ -52,7 +41,6 @@ export default defineBackground(() => {
           description: response.description,
         });
 
-        // Send the generated code back to the content script
         console.log("sender tab id", sender.tab?.id, tabId);
         if (tabId) {
           const message = {
@@ -74,7 +62,6 @@ export default defineBackground(() => {
         console.error("Failed to generate clone code:", error);
         const { tabId } = message;
 
-        // Send error back to content script
         if (tabId) {
           console.log("Sent Ai error response to Content Script");
           await browser.tabs.sendMessage(tabId, {
@@ -83,16 +70,73 @@ export default defineBackground(() => {
           });
         }
       }
-    } else if (message.type === "SET_API_TOKEN") {
-      // Handle API token setting
+    } else if (message.type === "SET_AI_PROVIDER") {
       try {
         const { default: aiService } = await import("./ai-service.ts");
-        await aiService.setApiToken(message.token, message.accountId);
+        /**
+         * This can be the following:
+         *  {
+         *    aiFeaturesEnabled: true,
+         *    aiProvider: "google",
+         *    googleApiKey: "",
+         *    googleModel: "gemini-1.5-pro",
+         *  }
+         *
+         *  {
+         *    aiFeaturesEnabled: true,
+         *    aiProvider: "openai",
+         *    openaiApiKey: "",
+         *    openaiModel: "gpt-4o-mini",
+         *  }
+         *
+         *  {
+         *    aiFeaturesEnabled: true,
+         *    aiProvider: "anthropic",
+         *    anthropicApiKey: "",
+         *    anthropicModel: "claude-3-5-sonnet-20240620",
+         *  }
+         *
+         *  {
+         *    aiFeaturesEnabled: true,
+         *    aiProvider: "cloudflare",
+         *    cloudflareApiKey: "",
+         *    cloudflareModel: "claude-3-5-sonnet-20240620",
+         *  }
+         *  {
+         *    aiFeaturesEnabled: false,
+         *    aiProvider:'huggingface',
+         *    huggingfaceApiKey: "",
+         *    huggingfaceModel: "google/gemini-2.0-flash-001",
+         * }
+         *
+         */
+        await aiService.setAiProvider({
+          aiFeaturesEnabled: message.settings.aiFeaturesEnabled,
+          aiProvider: message.settings.aiProvider,
+          aiToken:
+            message.settings.googleApiKey ||
+            message.settings.openaiApiKey ||
+            message.settings.anthropicApiKey ||
+            message.settings.cloudflareApiKey ||
+            message.settings.huggingfaceApiKey,
+          aiAccountId:
+            message.settings.googleAccountId ||
+            message.settings.openaiAccountId ||
+            message.settings.anthropicAccountId ||
+            message.settings.cloudflareAccountId ||
+            message.settings.huggingfaceAccountId,
+          aiModel:
+            message.settings.googleModel ||
+            message.settings.openaiModel ||
+            message.settings.anthropicModel ||
+            message.settings.cloudflareModel ||
+            message.settings.huggingfaceModel,
+        });
 
-        // Send success response
         if (sender.tab?.id) {
           await browser.tabs.sendMessage(sender.tab.id, {
-            type: "API_TOKEN_SET_SUCCESS",
+            type: "SET_AI_PROVIDER",
+            settings: message.settings,
           });
         }
       } catch (error) {
@@ -100,7 +144,7 @@ export default defineBackground(() => {
 
         if (sender.tab?.id) {
           await browser.tabs.sendMessage(sender.tab.id, {
-            type: "API_TOKEN_SET_ERROR",
+            type: "SET_AI_PROVIDER_ERROR",
             error: error instanceof Error ? error.message : String(error),
           });
         }

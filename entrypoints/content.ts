@@ -297,7 +297,7 @@ export default defineContentScript({
         screenHeight
       );
 
-      // Create the actual panel with smart positioning
+      // Create the modern floating panel
       const panel = document.createElement("div");
       panel.style.cssText = `
         position: absolute;
@@ -305,25 +305,26 @@ export default defineContentScript({
         left: ${position.left}px;
         width: ${size.width}px;
         height: ${size.height}px;
-        background: rgba(40, 40, 40, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 16px;
         box-shadow: 
-          0 8px 32px rgba(0, 0, 0, 0.4),
-          inset 0 1px 0 rgba(255, 255, 255, 0.1),
-          0 0 0 1px rgba(255, 255, 255, 0.05);
+          0 20px 40px rgba(0, 0, 0, 0.1),
+          0 8px 16px rgba(0, 0, 0, 0.06),
+          0 0 0 1px rgba(255, 255, 255, 0.8);
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
         font-size: 11px;
-        color: #e8e8e8;
+        color: #2c3e50;
         pointer-events: auto;
         overflow: hidden;
         display: flex;
         flex-direction: column;
         opacity: 0;
-        backdrop-filter: blur(25px);
-        transform: ${animation.initialTransform};
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(20px);
+        transform: ${animation.initialTransform} scale(0.8);
+        transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
+        animation: floatingPanel 4s ease-in-out infinite;
       `;
 
       // Add connection line to element
@@ -331,7 +332,7 @@ export default defineContentScript({
         addConnectionLine(panel, rect, position);
       }
 
-      // Add glassmorphism overlay
+      // Add subtle glassmorphism overlay
       const overlay = document.createElement("div");
       overlay.style.cssText = `
         position: absolute;
@@ -339,42 +340,48 @@ export default defineContentScript({
         left: 0;
         right: 0;
         bottom: 0;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+        background: linear-gradient(135deg, 
+          rgba(255, 255, 255, 0.1) 0%, 
+          rgba(255, 255, 255, 0.05) 100%);
         pointer-events: none;
         border-radius: 16px;
         z-index: 1;
+        animation: panelGlow 3s ease-in-out infinite;
       `;
       panel.appendChild(overlay);
 
-      // Create header
+      // Create modern header
       const header = document.createElement("div");
       header.style.cssText = `
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 12px;
-        background: rgba(30, 30, 30, 0.8);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 12px 16px;
+        background: rgba(248, 250, 252, 0.95);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         font-weight: 600;
         font-size: 12px;
-        backdrop-filter: blur(10px);
+        color: #1e293b;
+        backdrop-filter: blur(15px);
         position: relative;
         z-index: 2;
-        min-height: 36px;
+        min-height: 40px;
+        border-radius: 16px 16px 0 0;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       `;
 
       const title = document.createElement("span");
       title.textContent = "Element HTML";
-      title.style.color = "#fff";
-      title.style.textShadow = "0 2px 4px rgba(0, 0, 0, 0.3)";
+      title.style.color = "#1e293b";
+      title.style.fontWeight = "600";
 
       const closeBtn = document.createElement("button");
       closeBtn.textContent = "×";
       closeBtn.className = "close-btn";
       closeBtn.style.cssText = `
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: #fff;
+        background: rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        color: #64748b;
         font-size: 16px;
         cursor: pointer;
         padding: 2px 6px;
@@ -383,7 +390,7 @@ export default defineContentScript({
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 4px;
+        border-radius: 6px;
         transition: all 0.3s ease;
         backdrop-filter: blur(10px);
       `;
@@ -402,11 +409,11 @@ export default defineContentScript({
       });
 
       closeBtn.onmouseover = () => {
-        closeBtn.style.background = "rgba(255, 255, 255, 0.2)";
+        closeBtn.style.background = "rgba(0, 0, 0, 0.1)";
         closeBtn.style.transform = "scale(1.1)";
       };
       closeBtn.onmouseout = () => {
-        closeBtn.style.background = "rgba(255, 255, 255, 0.1)";
+        closeBtn.style.background = "rgba(0, 0, 0, 0.05)";
         closeBtn.style.transform = "scale(1)";
       };
 
@@ -423,25 +430,28 @@ export default defineContentScript({
         flex-direction: column;
       `;
 
-      // Code header with copy button
+      // Modern code header
       const codeHeader = document.createElement("div");
       codeHeader.style.cssText = `
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 6px 12px;
-        background: rgba(60, 60, 60, 0.9);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 8px 16px;
+        background: rgba(241, 245, 249, 0.95);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
         font-size: 10px;
         font-weight: 500;
-        backdrop-filter: blur(10px);
+        color: #475569;
+        backdrop-filter: blur(15px);
         position: relative;
         z-index: 2;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       `;
 
       const codeTitle = document.createElement("span");
       codeTitle.textContent = "HTML Code";
-      codeTitle.style.color = "#ccc";
+      codeTitle.style.color = "#475569";
+      codeTitle.style.fontWeight = "500";
 
       // right action buttons container
       const rActionButtonsWrapper = document.createElement("div");
@@ -533,25 +543,26 @@ export default defineContentScript({
       codeHeader.appendChild(codeTitle);
       codeHeader.appendChild(rActionButtonsWrapper);
 
-      // Create code editor
+      // Create modern code editor
       const codeEditor = document.createElement("pre");
       codeEditor.style.cssText = `
         flex: 1;
         margin: 0;
-        padding: 12px 16px;
-        background: rgba(50, 50, 50, 0.8);
-        color: #e8e8e8;
+        padding: 16px 20px;
+        background: rgba(255, 255, 255, 0.98);
+        color: #334155;
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Fira Code', monospace;
         font-size: 10px;
         line-height: 1.4;
         overflow: auto;
         white-space: pre-wrap;
         word-break: break-word;
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(15px);
         position: relative;
-        border-radius: 0 0 12px 12px;
+        border-radius: 0 0 16px 16px;
         max-height: none;
         min-height: 200px;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
       `;
 
       const code = document.createElement("code");
@@ -568,10 +579,10 @@ export default defineContentScript({
       codePanel.appendChild(panel);
       document.body.appendChild(codePanel);
 
-      // Trigger entry animation
+      // Trigger entry animation for orb
       requestAnimationFrame(() => {
         panel.style.opacity = "1";
-        panel.style.transform = animation.finalTransform;
+        panel.style.transform = animation.finalTransform + " scale(1)";
       });
 
       // Add click outside to close
@@ -981,6 +992,32 @@ export default defineContentScript({
           50% { 
             opacity: 0.4;
             stroke-width: 10;
+          }
+        }
+        
+        @keyframes floatingPanel {
+          0%, 100% { 
+            transform: translateY(0px);
+            box-shadow: 
+              0 20px 40px rgba(0, 0, 0, 0.1),
+              0 8px 16px rgba(0, 0, 0, 0.06),
+              0 0 0 1px rgba(255, 255, 255, 0.8);
+          }
+          50% { 
+            transform: translateY(-4px);
+            box-shadow: 
+              0 24px 48px rgba(0, 0, 0, 0.12),
+              0 10px 20px rgba(0, 0, 0, 0.08),
+              0 0 0 1px rgba(255, 255, 255, 0.9);
+          }
+        }
+        
+        @keyframes panelGlow {
+          0%, 100% { 
+            opacity: 0.4;
+          }
+          50% { 
+            opacity: 0.6;
           }
         }
       `;

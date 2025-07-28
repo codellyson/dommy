@@ -493,7 +493,6 @@
     </div>
 
     <script type="module">
-      // Get browser API - try different methods for different environments
       let browser;
       if (typeof chrome !== "undefined" && chrome.runtime) {
         browser = chrome;
@@ -706,10 +705,9 @@
                 .getElementById("huggingface-model")
                 .value.trim();
             }
-
+            console.log({ settings });
             await browser.storage.local.set(settings);
 
-            // Send message to background script to update AI service
             if (provider && browser.runtime) {
               await browser.runtime.sendMessage({
                 type: "SET_AI_PROVIDER",
@@ -805,7 +803,6 @@
               return;
             }
 
-            // Send a test message to background script
             await browser.runtime.sendMessage({
               type: "TEST_AI_CONNECTION",
               provider: provider,
@@ -835,7 +832,6 @@
         }
       }
 
-      // Initialize settings manager when DOM is loaded
       document.addEventListener("DOMContentLoaded", () => {
         if (browser && browser.storage) {
           new SettingsManager();
